@@ -45,12 +45,12 @@ protected:
 
     virtual void onRtcpPacket(int track_idx, SdpTrack::Ptr &track, uint8_t *data, size_t len);
 
-private:
+protected:
     void onPublishResult_l(const toolkit::SockException &ex, bool handshake_done);
 
-    void sendAnnounce();
+    virtual void sendAnnounce();
     void sendSetup(unsigned int track_idx);
-    void sendRecord();
+    virtual void sendRecord();
     void sendOptions();
     void sendTeardown();
 
@@ -69,7 +69,7 @@ private:
     void setSocketFlags();
     void updateRtcpContext(const RtpPacket::Ptr &pkt);
 
-private:
+
     unsigned int _cseq = 1;
     Rtsp::eRtpType _rtp_type = Rtsp::RTP_TCP;
 

@@ -5,6 +5,13 @@ set(CMAKE_CXX_STANDARD 11)
 #加载自定义模块
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+
+set(CMAKE_PREFIX_PATH /usr/local/openssl /usr/local/srtp)
+include_directories(/usr/local/include)
+link_directories(/usr/local/lib)
+
+
+
 find_program(CCACHE_FOUND ccache)
 if(CCACHE_FOUND)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
@@ -380,3 +387,5 @@ endif ()
 if (ENABLE_PLAYER)
     add_subdirectory(player)
 endif ()
+
+add_subdirectory(vary)
