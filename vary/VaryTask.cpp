@@ -13,10 +13,6 @@ VaryTask::VaryTask(const toolkit::EventPoller::Ptr& poller){
     }
     else this->poller = poller;
     /* 默认初始化任务状态回调为空 */
-    this->_status_invoke = [](int, const std::string&)->int{
-        return 0;
-    };
-    setState(TaskStatus::unknown);
     _muxer_source = std::make_shared<mediakit::RtspMuxer>();
 }
 VaryTask::~VaryTask(){
@@ -24,63 +20,19 @@ VaryTask::~VaryTask(){
 }
 
 void VaryTask::start_l(){
-
-    if(getState() == TaskStatus::Initing){
-        WarnL << "任务已经初始化";
-        return;
-    }
-    setState(TaskStatus::Initing);
-    /* 在初始化前进行一次回调 */
-    InfoL << "任务正在初始化中";
-    auto ret = _status_invoke(getState(), "任务正在初始化中");
-    if( ret < 0){
-        return stop_l();
-    }
-
-
     /* 开始初始化拉流器 */
     std::weak_ptr<VaryTask> self = shared_from_this();
-
     /* 拉流器拉流结果 */
     auto player_result = [self](const SockException& e){
         auto stronger_self = self.lock();
         if( !stronger_self ){
             return;
         }
-        int err = 0;
-        std::string msg;
-        switch(e.getErrCode()){
-            case ErrCode::Err_success:
-                err = TaskStatus::pull_success;
-                msg = "拉流成功";
-                break;
-            case ErrCode::Err_timeout:
-                err = TaskStatus::pull_timeout;
-                msg = "拉流超时";
-                break;
-            case ErrCode::Err_dns:
-                err = TaskStatus::pull_dns_err;
-                msg = "拉流dns解析失败";
-                break;
-            case ErrCode::Err_eof:
-                err = TaskStatus::pull_ative_err;
-                msg = "对端主动关闭连接";
-                break;
-            case ErrCode::Err_refused:
-                err = TaskStatus::pull_reset_conn;
-                msg = "连接被重置";
-                break;
-            case ErrCode::Err_other:
-                err = TaskStatus::other_err;
-                msg = e.what();
-                break;
-        }
         //切换到自己的线程回复
-        stronger_self->poller->async([err, msg, stronger_self](){
+        stronger_self->poller->async([stronger_self, e](){
             /* 设置当前任务的状态并调用回调 */
-            stronger_self->setState(err);
-            int ret = stronger_self->_status_invoke(err, msg);
-            if( ret < 0 || err != TaskStatus::pull_success){
+            if(e.getErrCode() != toolkit::Err_success){
+                ErrorL << e.what();
                 stronger_self -> stop_l();
                 return;
             }
@@ -96,33 +48,16 @@ void VaryTask::start_l(){
 }
 
 void VaryTask::stop_l(){
-    InfoL << "任务被取消";
-    setState(TaskStatus::die);
-    {
 
-    }
-    _status_invoke(getState(), "任务被取消");
 }
 
-void VaryTask::setOnTaskStatusInvoke(const OnTaskStatusInvoke& f){
-    if(f) _status_invoke = f;
-}
 
 void VaryTask::startInitCoder(){
     /* 函数在自己线程 */
-    /* 设置状态 */
-    setState(TaskStatus::coder_initing);
-    auto ret = _status_invoke(getState(), "正在初始化编解码器");
-    //停止任务
-    if(ret < 0){
-        return stop_l();
-    }
     _vary_coder = std::make_shared<VaryCoder>();
     tracks = player->getTracks();
     if(!tracks.size()){
         InfoL << "拉流端的通道为空";
-        setState(TaskStatus::pull_track_empty);
-        _status_invoke(getState(),"拉流端的通道为空");
         return stop_l();
     }
 
@@ -143,8 +78,6 @@ void VaryTask::startInitCoder(){
         _ctx.src_id = _ctx.dst_id = get_avcodec_id_func(track->getCodecId());
         if(_ctx.src_id == AV_CODEC_ID_NONE){
             ErrorL << "编解码器初始化失败, 不支持此解码";
-            setState(TaskStatus::coder_init_failed);
-            _status_invoke(getState(), "编解码器初始化失败, 不支持此解码");
             return stop_l();
         }
         //这里暂时写死
@@ -182,53 +115,16 @@ void VaryTask::startInitCoder(){
 }
 
 void VaryTask::start_push(){
-    /* 此函数在自己的线程执行 */
-    setState(TaskStatus::pushing);
-    InfoL << "正在尝试推流";
-    auto ret = _status_invoke(getState(), "正在尝试推流");
-    if( ret < 0){
-        return stop_l();
-    }
     std::weak_ptr<VaryTask> self = shared_from_this();
     //推流结果回调
     auto publish_func = [self](const SockException& e){
         auto stronger_self = self.lock();
         if(!stronger_self)
             return;
-        int err = 0;
-        std::string msg;
-        switch(e.getErrCode()){
-        case ErrCode::Err_success:
-            err = TaskStatus::push_success;
-            msg = "推流成功";
-            break;
-        case ErrCode::Err_timeout:
-            err = TaskStatus::push_timeout;
-            msg = "推流超时";
-            break;
-        case ErrCode::Err_dns:
-            err = TaskStatus::push_dns_err;
-            msg = "推流dns解析失败";
-            break;
-        case ErrCode::Err_eof:
-            err = TaskStatus::push_ative_err;
-            msg = "收流对端主动关闭连接";
-            break;
-        case ErrCode::Err_refused:
-            err = TaskStatus::push_reset_conn;
-            msg = "连接被重置";
-            break;
-        case ErrCode::Err_other:
-            err = TaskStatus::other_err;
-            msg = e.what();
-            break;
-        }
         //切换到自己的线程回复
-        stronger_self->poller->async([err, msg, stronger_self](){
+        stronger_self->poller->async([e, stronger_self](){
             /* 设置当前任务的状态并调用回调 */
-            stronger_self->setState(err);
-            int ret = stronger_self->_status_invoke(err, msg);
-            if( ret < 0 || err != TaskStatus::push_success){
+            if( e != Err_success){
                 stronger_self -> stop_l();
                 return;
             }

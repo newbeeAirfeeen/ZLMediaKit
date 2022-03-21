@@ -1,6 +1,5 @@
 #include <Poller/EventPoller.h>
 #include <Util/onceToken.h>
-#include "VarySession.h"
 #include <Network/TcpServer.h>
 #include <Http/HttpSession.h>
 #include <Common/config.h>

@@ -21,10 +21,7 @@ set(LIB avfilter
 
 add_executable(vary vary.cpp
         VaryFrameWriter.cpp
-        VarySession.cpp
-        RtspMuxerMediaSource.cpp
         RtspPusher.cpp
-        RtspPlayer.hpp
         VaryManager.cpp
         VaryTask.cpp
                     ${ffmpeg_src})
