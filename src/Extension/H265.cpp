@@ -96,7 +96,7 @@ bool H265Track::ready() {
 static void writeFile(const char* filename, const char* buf, int len)
 {
     FILE* fd = fopen(filename, "a+b");
-    if (fd > 0)
+    if (fd)
     {
         fseek(fd, 0L, SEEK_END);
         fwrite((void *)buf, 1, len, fd);
