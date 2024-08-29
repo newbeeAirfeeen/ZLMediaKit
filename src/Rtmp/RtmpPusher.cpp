@@ -183,9 +183,12 @@ void RtmpPusher::send_metaData(){
         throw std::runtime_error("the media source was released");
     }
 
-    AMFEncoder enc;
-    enc << "@setDataFrame" << "onMetaData" << src->getMetaData();
-    sendRequest(MSG_DATA, enc.data());
+    // metadata
+    src->getMetaData([&](const AMFValue &metadata) {
+        AMFEncoder enc;
+        enc << "@setDataFrame" << "onMetaData" << metadata;
+        sendRequest(MSG_DATA, enc.data());
+    });
 
     src->getConfigFrame([&](const RtmpPacket::Ptr &pkt) {
         sendRtmp(pkt->type_id, _stream_index, pkt, pkt->time_stamp, pkt->chunk_id);

@@ -179,6 +179,12 @@ public:
     }
 };
 
+static inline void clear_hls_path()
+{
+    GET_CONFIG(string, hlsPath, Protocol::kHlsSavePath);
+    File::delete_file(hlsPath.data());
+}
+
 //全局变量，在WebApi中用于保存配置文件用
 string g_ini_file;
 
@@ -242,6 +248,9 @@ int start_main(int argc,char *argv[]) {
                 return true;
             });
         }
+
+        // 清理hls下面的文件
+        clear_hls_path(); 
 
         uint16_t shellPort = mINI::Instance()[Shell::kPort];
         uint16_t rtspPort = mINI::Instance()[Rtsp::kPort];

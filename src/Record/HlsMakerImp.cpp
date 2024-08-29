@@ -30,6 +30,10 @@ HlsMakerImp::HlsMakerImp(const string &m3u8_file,
     _poller = EventPollerPool::Instance().getPoller();
     _path_prefix = m3u8_file.substr(0, m3u8_file.rfind('/'));
     _path_hls = m3u8_file;
+    // _path_hls = "/streamid.m3u8";
+    size_t pos1 = m3u8_file.rfind('/');
+    size_t pos2 = m3u8_file.rfind('.');
+    _stream_id = m3u8_file.substr(pos1 + 1, pos2 - pos1 - 1);
     _params = params;
     _buf_size = bufSize;
     _file_buf.reset(new char[bufSize], [](char *ptr) {
@@ -61,25 +65,40 @@ void HlsMakerImp::clearCache(bool immediately, bool eof) {
     //hls直播才删除文件
     GET_CONFIG(uint32_t, delay, Hls::kDeleteDelaySec);
     if (!delay || immediately) {
-        File::delete_file(_path_prefix.data());
+        File::scanDir(_path_prefix, [this](const string &path, bool isDir) {
+            if (path.find(_stream_id) != std::string::npos) {
+                File::delete_file(path.data()); // 只删除自己流id相关的文件及文件夹，不能影响其他流
+            }
+            return true;
+        });
     } else {
         auto path_prefix = _path_prefix;
-        _poller->doDelayTask(delay * 1000, [path_prefix]() {
-            File::delete_file(path_prefix.data());
+        auto stream_id = _stream_id;
+        _poller->doDelayTask(delay * 1000, [path_prefix, stream_id]() {
+            File::scanDir(path_prefix, [stream_id](const string &path, bool isDir) {
+                if (path.find(stream_id) != std::string::npos) {
+                    File::delete_file(path.data()); // 只删除自己流id相关的文件及文件夹，不能影响其他流
+                }
+                return true;
+            });
             return 0;
         });
     }
 }
 
-string HlsMakerImp::onOpenSegment(uint64_t index) {
+string HlsMakerImp::onOpenSegment(uint64_t index, bool init_mp4 /*= false*/, bool use_fmp4 /* = false*/) {
     string segment_name, segment_path;
     {
         auto strDate = getTimeStr("%Y-%m-%d");
         auto strHour = getTimeStr("%H");
         auto strTime = getTimeStr("%M-%S");
-        segment_name = StrPrinter << strDate + "/" + strHour + "/" + strTime << "_" << index << ".ts";
+        if (init_mp4) {
+            segment_name = StrPrinter << _info.stream << "_init.mp4"; // init segment存储文件名
+        } else {
+            segment_name = StrPrinter << (_info.stream + "_" + strDate + "/" + strHour + "/" + strTime) << "_" << index << (use_fmp4 ? ".m4s" : ".ts");
+        }
         segment_path = _path_prefix + "/" + segment_name;
-        if (isLive()) {
+        if (isLive() && !init_mp4) {
             _segment_file_paths.emplace(index, segment_path);
         }
     }
@@ -99,6 +118,13 @@ string HlsMakerImp::onOpenSegment(uint64_t index) {
     }
     return segment_name + "?" + _params;
 }
+
+bool HlsMakerImp::fileExist(const std::string &file_name)
+{
+    std::string file_name_full = _path_prefix + "/" + file_name;
+    return File::fileExist(file_name_full.c_str());
+}
+
 
 void HlsMakerImp::onDelSegment(uint64_t index) {
     auto it = _segment_file_paths.find(index);

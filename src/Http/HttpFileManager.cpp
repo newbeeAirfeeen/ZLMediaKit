@@ -31,12 +31,15 @@ namespace mediakit {
 // 每次访问一次该cookie，那么将重新刷新cookie有效期
 // 假如播放器在60秒内都未访问该cookie，那么将重新触发hls播放鉴权
 static int kHlsCookieSecond = 60;
+static const size_t kFindSrcIntervalSecond = 3;
 static const string kCookieName = "ZL_COOKIE";
-static const string kHlsSuffix = "/hls.m3u8";
+static const string kHlsSuffix = ".m3u8";
 
 struct HttpCookieAttachment {
     //是否已经查找到过MediaSource
     bool _find_src = false;
+    // 查找MediaSource计时
+    Ticker _find_src_ticker;
     //cookie生效作用域，本cookie只对该目录下的文件生效
     string _path;
     //上次鉴权失败信息,为空则上次鉴权成功
@@ -421,17 +424,21 @@ static void accessFile(Session &sender, const Parser &parser, const MediaInfo &m
             return;
         }
 
-        auto src = cookie->getAttach<HttpCookieAttachment>()._hls_data->getMediaSource();
-        if (src) {
-            //直接从内存获取m3u8索引文件(而不是从文件系统)
+        auto &attach = cookie->getAttach<HttpCookieAttachment>();
+        auto src = attach._hls_data->getMediaSource();
+
+        if (src && file_path.find(src->getId()) != std::string::npos) {
+            // 直接从内存获取m3u8索引文件(而不是从文件系统)
             response_file(cookie, cb, file_path, parser, src->getIndexFile());
             return;
-        }
-        if (cookie->getAttach<HttpCookieAttachment>()._find_src) {
-            //查找过MediaSource，但是流已经注销了，不用再查找
+        } 
+
+        // InfoL << "filepath:" << file_path << "cookie file path:" << attach._path;
+        if (attach._find_src && attach._find_src_ticker.elapsedTime() < kFindSrcIntervalSecond * 1000) {
+            // 最近已经查找过MediaSource了，为了防止频繁查找导致占用全局互斥锁的问题，我们尝试直接从磁盘返回hls索引文件
             response_file(cookie, cb, file_path, parser);
             return;
-        }
+        } 
 
         //hls流可能未注册，MediaSource::findAsync可以触发not_found事件，然后再按需推拉流
         MediaSource::findAsync(media_info, strongSession, [response_file, cookie, cb, file_path, parser](const MediaSource::Ptr &src) {
@@ -448,6 +455,9 @@ static void accessFile(Session &sender, const Parser &parser, const MediaInfo &m
             attach._hls_data->addByteUsage(0);
             //标记找到MediaSource
             attach._find_src = true;
+
+            // 重置查找MediaSource计时
+            attach._find_src_ticker.resetTime();
 
             // m3u8文件可能不存在, 等待m3u8索引文件按需生成
             hls->getIndexFile([response_file, file_path, cookie, cb, parser](const string &file) {

@@ -20,6 +20,30 @@ uint32_t RtmpMediaSource::getTimeStamp(TrackType trackType)
     return ret;
 }
 
+void RtmpMediaSource::setMetaData(const AMFValue &metadata) {
+    {
+        std::lock_guard<std::recursive_mutex> lock(_mtx);
+        _metadata = metadata;
+        _metadata.set("title", std::string("Streamed by ") + kServerName);
+    }
+
+    _have_video = _metadata["videocodecid"];
+    _have_audio = _metadata["audiocodecid"];
+    if (_ring) {
+        regist();
+
+        AMFEncoder enc;
+        enc << "onMetaData" << _metadata;
+        RtmpPacket::Ptr packet = RtmpPacket::create();
+        packet->buffer = enc.data();
+        packet->type_id = MSG_DATA;
+        packet->time_stamp = 0;
+        packet->chunk_id = CHUNK_CLIENT_REQUEST_AFTER;
+        packet->stream_index = STREAM_MEDIA;
+        onWrite(std::move(packet));
+    }
+}
+
 void RtmpMediaSource::onWrite(RtmpPacket::Ptr pkt, bool /*= true*/)
 {
     bool is_video = pkt->type_id == MSG_VIDEO;

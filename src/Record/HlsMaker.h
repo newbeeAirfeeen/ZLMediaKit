@@ -14,10 +14,11 @@
 #include <string>
 #include <deque>
 #include <tuple>
+#include "MP4Muxer.h"
 
 namespace mediakit {
 
-class HlsMaker {
+class HlsMaker: public MP4MuxerMemory {
 public:
     /**
      * @param seg_duration 切片文件长度
@@ -50,6 +51,24 @@ public:
      * 清空记录
      */
     void clear();
+    // h265支持
+    bool addTrack(const Track::Ptr &track) { 
+        if (track->getCodecId() == CodecH265) {
+            use_fmp4 = true;
+        }
+        return MP4MuxerMemory::addTrack(track); 
+    }
+    void onAllTrackReady() {
+        if (!use_fmp4) {
+            return;
+        }
+        _init_segment = getInitSegment(); // 获取init_segment存储到初始化文件中
+        _init_file_name = onOpenSegment(0, true, true);
+        if (!_init_segment.empty() && !_init_file_name.empty()) {
+            onWriteSegment((char *) _init_segment.data(), _init_segment.length());
+        }
+    }
+    void resetTracks() { MP4MuxerMemory::resetTracks(); }
 
 protected:
     /**
@@ -57,7 +76,7 @@ protected:
      * @param index
      * @return
      */
-    virtual std::string onOpenSegment(uint64_t index) = 0;
+    virtual std::string onOpenSegment(uint64_t index, bool init_mp4 = false, bool use_fmp4 = false) = 0;
 
     /**
      * 删除ts切片文件回调
@@ -76,6 +95,8 @@ protected:
      * 写m3u8文件回调
      */
     virtual void onWriteHls(const std::string &data) = 0;
+    virtual bool fileExist(const std::string &file_name) = 0;
+
 
     /**
      * 上一个 ts 切片写入完成, 可在这里进行通知处理
@@ -89,6 +110,7 @@ protected:
      */
     void flushLastSegment(bool eof);
 
+    void onSegmentData(std::string string, uint64_t stamp, bool key_frame) override; // fmp4切片数据回调
 private:
     /**
      * 生成m3u8文件
@@ -105,7 +127,7 @@ private:
      * 添加新的ts切片
      * @param timestamp
      */
-    void addNewSegment(uint64_t timestamp);
+    void addNewSegment(uint64_t timestamp, bool use_fmp4 = false);
 
 private:
     float _seg_duration = 0;
@@ -116,6 +138,9 @@ private:
     uint64_t _file_index = 0;
     std::string _last_file_name;
     std::deque<std::tuple<int,std::string> > _seg_dur_list;
+    std::string _init_file_name;
+    std::string _init_segment;
+    bool use_fmp4 = false;
 };
 
 }//namespace mediakit

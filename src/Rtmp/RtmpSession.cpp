@@ -288,16 +288,13 @@ void RtmpSession::sendPlayResponse(const string &err, const RtmpMediaSource::Ptr
                  "details", _media_info._streamid,
                  "clientid", "0"});
 
-    auto &metadata = src->getMetaData();
-    if(metadata){
-        //在有metadata的情况下才发送metadata
-        //其实metadata没什么用，有些推流器不产生metadata
-        // onMetaData
+    // metadata
+    src->getMetaData([&](const AMFValue &metadata) {
         invoke.clear();
         invoke << "onMetaData" << metadata;
         sendResponse(MSG_DATA, invoke.data());
-    }
-
+    });
+    
     src->getConfigFrame([&](const RtmpPacket::Ptr &pkt) {
         onSendMedia(pkt);
     });

@@ -78,9 +78,12 @@ public:
     /**
      * 获取metadata
      */
-    const AMFValue &getMetaData() const {
+    template <typename FUNC>
+    void getMetaData(const FUNC &func) const {
         std::lock_guard<std::recursive_mutex> lock(_mtx);
-        return _metadata;
+        if (_metadata) {
+            func(_metadata);
+        }
     }
 
     /**
@@ -97,15 +100,7 @@ public:
     /**
      * 设置metadata
      */
-    virtual void setMetaData(const AMFValue &metadata) {
-        _metadata = metadata;
-        _metadata.set("server", kServerName);
-        _have_video = _metadata["videocodecid"];
-        _have_audio = _metadata["audiocodecid"];
-        if (_ring) {
-            regist();
-        }
-    }
+    virtual void setMetaData(const AMFValue &metadata);
 
     /**
      * 更新metadata

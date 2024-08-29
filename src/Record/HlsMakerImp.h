@@ -50,11 +50,12 @@ public:
      void clearCache();
 
 protected:
-    std::string onOpenSegment(uint64_t index) override ;
+    std::string onOpenSegment(uint64_t index, bool init_mp4 = false, bool use_fmp4 = false) override ;
     void onDelSegment(uint64_t index) override;
     void onWriteSegment(const char *data, size_t len) override;
     void onWriteHls(const std::string &data) override;
     void onFlushLastSegment(uint64_t duration_ms) override;
+    bool fileExist(const std::string &file_name);
 
 private:
     std::shared_ptr<FILE> makeFile(const std::string &file,bool setbuf = false);
@@ -71,6 +72,7 @@ private:
     HlsMediaSource::Ptr _media_src;
     toolkit::EventPoller::Ptr _poller;
     std::map<uint64_t/*index*/,std::string/*file_path*/> _segment_file_paths;
+    std::string _stream_id;
 };
 
 }//namespace mediakit

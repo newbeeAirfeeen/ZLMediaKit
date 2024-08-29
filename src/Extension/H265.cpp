@@ -93,6 +93,17 @@ bool H265Track::ready() {
     return !_vps.empty() && !_sps.empty() && !_pps.empty();
 }
 
+static void writeFile(const char* filename, const char* buf, int len)
+{
+    FILE* fd = fopen(filename, "a+b");
+    if (fd > 0)
+    {
+        fseek(fd, 0L, SEEK_END);
+        fwrite((void *)buf, 1, len, fd);
+        fclose(fd);
+    }
+}
+
 bool H265Track::inputFrame(const Frame::Ptr &frame) {
     int type = H265_TYPE(frame->data()[frame->prefixSize()]);
     if (!frame->configFrame() && type != H265Frame::NAL_SEI_PREFIX && ready()) {
@@ -109,6 +120,8 @@ bool H265Track::inputFrame(const Frame::Ptr &frame) {
     return ret;
 }
 
+
+
 bool H265Track::inputFrame_l(const Frame::Ptr &frame) {
     if (frame->keyFrame()) {
         insertConfigFrame(frame);
@@ -123,14 +136,17 @@ bool H265Track::inputFrame_l(const Frame::Ptr &frame) {
     switch (H265_TYPE( frame->data()[frame->prefixSize()])) {
         case H265Frame::NAL_VPS: {
             _vps = string(frame->data() + frame->prefixSize(), frame->size() - frame->prefixSize());
+            ret = VideoTrack::inputFrame(frame);
             break;
         }
         case H265Frame::NAL_SPS: {
             _sps = string(frame->data() + frame->prefixSize(), frame->size() - frame->prefixSize());
+            ret = VideoTrack::inputFrame(frame);
             break;
         }
         case H265Frame::NAL_PPS: {
             _pps = string(frame->data() + frame->prefixSize(), frame->size() - frame->prefixSize());
+            ret = VideoTrack::inputFrame(frame);
             break;
         }
         default: {

@@ -64,7 +64,11 @@ public:
             _hls->getMediaSource()->setIndexFile("");
         }
         if (_enabled || !_option.hls_demand) {
-            return MpegMuxer::inputFrame(frame);
+            if (!_use_fmp4) {
+                return MpegMuxer::inputFrame(frame); // ts
+            } else {
+                return _hls->inputFrame(frame); // fmp4
+            }
         }
         return false;
     }
@@ -72,6 +76,26 @@ public:
     bool isEnabled() {
         //缓存尚未清空时，还允许触发inputFrame函数，以便及时清空缓存
         return _option.hls_demand ? (_clear_cache ? true : _enabled) : true;
+    }
+
+    bool addTrack(const Track::Ptr & track) override
+    {
+        if (track->getCodecId() == CodecH265) {
+            _use_fmp4 = true;
+        }
+        MpegMuxer::addTrack(track);
+        _hls->addTrack(track);
+        return true;
+    }
+
+    void onAllTrackReady() {
+        _hls->onAllTrackReady();
+    }
+
+    void resetTracks() override
+    {
+        MpegMuxer::resetTracks();
+        _hls->resetTracks();
     }
 
 private:
@@ -88,6 +112,7 @@ private:
     bool _clear_cache = false;
     ProtocolOption _option;
     std::shared_ptr<HlsMakerImp> _hls;
+    bool _use_fmp4 = false;
 };
 }//namespace mediakit
 #endif //HLSRECORDER_H

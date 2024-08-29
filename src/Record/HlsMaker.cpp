@@ -10,7 +10,6 @@
 
 #include "HlsMaker.h"
 #include "Common/config.h"
-
 using namespace std;
 
 namespace mediakit {
@@ -53,7 +52,8 @@ void HlsMaker::makeIndexFile(bool eof) {
     } else {
         snprintf(file_content, sizeof(file_content),
                  "#EXTM3U\n"
-                 "#EXT-X-VERSION:3\n"
+                 "#EXT-X-VERSION:7\n"
+                 "#EXT-X-INDEPENDENT-SEGMENTS\n"
                  "#EXT-X-ALLOW-CACHE:NO\n"
                  "#EXT-X-TARGETDURATION:%u\n"
                  "#EXT-X-MEDIA-SEQUENCE:%llu\n",
@@ -62,6 +62,11 @@ void HlsMaker::makeIndexFile(bool eof) {
     }
     
     m3u8.assign(file_content);
+
+    if (!_init_file_name.empty()) {
+        snprintf(file_content, sizeof(file_content), "#EXT-X-MAP:URI=\"%s\"\n", _init_file_name.data());
+        m3u8.append(file_content);
+    }
 
     for (auto &tp : _seg_dur_list) {
         snprintf(file_content, sizeof(file_content), "#EXTINF:%.3f,\n%s\n", std::get<0>(tp) / 1000.0, std::get<1>(tp).data());
@@ -118,7 +123,7 @@ void HlsMaker::delOldSegment() {
     }
 }
 
-void HlsMaker::addNewSegment(uint64_t stamp) {
+void HlsMaker::addNewSegment(uint64_t stamp, bool use_fmp4 /*=false*/) {
     if (!_last_file_name.empty() && stamp - _last_seg_timestamp < _seg_duration * 1000) {
         //存在上个切片，并且未到分片时间
         return;
@@ -127,9 +132,38 @@ void HlsMaker::addNewSegment(uint64_t stamp) {
     //关闭并保存上一个切片，如果_seg_number==0,那么是点播。
     flushLastSegment(false);
     //新增切片
-    _last_file_name = onOpenSegment(_file_index++);
+    _last_file_name = onOpenSegment(_file_index++, false, use_fmp4);
     //记录本次切片的起始时间戳
     _last_seg_timestamp = _last_timestamp ? _last_timestamp : stamp;
+}
+
+void HlsMaker::onSegmentData(std::string string, uint64_t stamp, bool key_frame) {
+    if (string.empty()) {
+        flushLastSegment(false);
+        return;
+    }
+
+    if (stamp < _last_timestamp) {
+            //时间戳回退了，切片时长重新计时
+            // WarnL << "stamp reduce: " << _last_timestamp << " -> " << stamp;
+            // _last_seg_timestamp = _last_timestamp = stamp;
+    }
+    if (key_frame) {
+        // 如果清空了init.mp4,或者init文件不存在,则重新生成
+        if (_init_file_name.empty() || (!_init_file_name.empty() && !fileExist(_init_file_name))) {
+            _init_file_name = onOpenSegment(0, true, true);
+            if (!_init_segment.empty() && !_init_file_name.empty()) {
+                onWriteSegment((char *) _init_segment.data(), _init_segment.length());
+            }
+        } 
+        //尝试切片ts
+        addNewSegment(stamp, true);
+    }
+    if (!_last_file_name.empty()) {
+        //存在切片才写入fmp4数据
+        onWriteSegment((char *) string.data(), string.length());
+        _last_timestamp = stamp;
+    }
 }
 
 void HlsMaker::flushLastSegment(bool eof){
@@ -164,6 +198,7 @@ void HlsMaker::clear() {
     _last_seg_timestamp = 0;
     _seg_dur_list.clear();
     _last_file_name.clear();
+    _init_file_name.clear();
 }
 
 }//namespace mediakit

@@ -85,6 +85,25 @@ public:
      * @param frame 帧数据，必须
      */
     bool inputFrame(const Frame::Ptr &frame) override;
+#if 0
+    /**
+     * 刷新输出所有frame缓存
+    */
+    void flush() override;
+
+private:
+    void insertConfigFrame(uint64_t pts);
+    bool inputFrame_l(const Frame::Ptr &frame, bool is_mark);
+    void packRtp(const char *data, size_t len, uint64_t pts, bool is_mark, bool gop_pos);
+    void packRtpFu(const char *data, size_t len, uint64_t pts, bool is_mark, bool gop_pos);
+    void packRtpStapA(const char *data, size_t len, uint64_t pts, bool is_mark, bool gop_pos);
+
+private:
+    Frame::Ptr _vps;
+    Frame::Ptr _sps;
+    Frame::Ptr _pps;
+    Frame::Ptr _last_frame;
+#endif
 };
 
 }//namespace mediakit{

@@ -20,6 +20,7 @@ using namespace std;
 using namespace toolkit;
 
 namespace mediakit {
+static const string kHlsSuffix = ".m3u8";
 
 string Recorder::getRecordPath(Recorder::type type, const string &vhost, const string &app, const string &stream_id, const string &customized_path) {
     GET_CONFIG(bool, enableVhost, General::kEnableVhost);
@@ -28,9 +29,9 @@ string Recorder::getRecordPath(Recorder::type type, const string &vhost, const s
             GET_CONFIG(string, hlsPath, Protocol::kHlsSavePath);
             string m3u8FilePath;
             if (enableVhost) {
-                m3u8FilePath = vhost + "/" + app + "/" + stream_id + "/hls.m3u8";
+                m3u8FilePath = vhost + "/" + app + "/" + stream_id + kHlsSuffix;
             } else {
-                m3u8FilePath = app + "/" + stream_id + "/hls.m3u8";
+                m3u8FilePath = app + "/" + stream_id + kHlsSuffix;
             }
             //Here we use the customized file path.
             if (!customized_path.empty()) {

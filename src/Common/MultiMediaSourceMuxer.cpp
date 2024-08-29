@@ -374,6 +374,9 @@ void MultiMediaSourceMuxer::onAllTrackReady() {
         _fmp4->onAllTrackReady();
     }
 #endif
+    if (_hls) {
+        _hls->onAllTrackReady();
+    }
     auto listener = _track_listener.lock();
     if (listener) {
         listener->onAllTrackReady();
