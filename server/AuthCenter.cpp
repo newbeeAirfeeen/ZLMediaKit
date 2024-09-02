@@ -40,8 +40,9 @@ auto AuthCenter::auth(const mediakit::MediaInfo &info, const mediakit::Broadcast
     requester->addHeader("Content-Type", "application/json");
     requester->startRequester(
         uri,
-        [invoker, info](const toolkit::SockException &ex, const Parser &response) {
-            InfoL << "app=" << info._app << ", stream_id=" << info._streamid << ", auth response:" << response.Content();
+        [invoker, info, requester](const toolkit::SockException &ex, const Parser &response) {
+            InfoL << "app=" << info._app << ", stream_id=" << info._streamid
+                  << ", auth response:" << response.Content();
             if (ex) {
                 invoker("hook failed...");
                 return;
@@ -63,7 +64,8 @@ auto AuthCenter::auth(const mediakit::MediaInfo &info, const mediakit::Broadcast
         2.0);
     return true;
 }
-auto AuthCenter::media_changed(const std::string& app, const std::string& id, int reader_count, uint64_t first_played) -> bool{
+auto AuthCenter::media_changed(const std::string &app, const std::string &id, int reader_count, uint64_t first_played)
+    -> bool {
     auto key = app + ":" + id;
     std::lock_guard<std::mutex> lck(_mtx);
     auto it = _auth_entry_map.find(key);
@@ -83,7 +85,7 @@ auto AuthCenter::media_changed(const std::string& app, const std::string& id, in
     requester->addHeader("Content-Type", "application/json");
     requester->startRequester(
         uri,
-        [app, id](const toolkit::SockException &ex, const Parser &response) {
+        [app, id, requester](const toolkit::SockException &ex, const Parser &response) {
             InfoL << "app=" << app << ", stream_id=" << id << ", media_changed response:" << response.Content();
             if (ex) {
                 return;
