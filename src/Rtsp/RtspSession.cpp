@@ -360,7 +360,7 @@ void RtspSession::emitOnPlay(){
         //该事件无人监听,默认不鉴权
         onRes("");
     }else{
-        InfoL << "dynamic auth, app= << " << _media_info._app << ", stream=" << _media_info._streamid;
+        InfoL << "dynamic auth, app=" << _media_info._app << ", stream=" << _media_info._streamid;
         AuthCenter::instance().auth(_media_info, invoker);
     }
     //已经鉴权过了

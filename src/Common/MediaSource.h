@@ -127,6 +127,11 @@ public:
 
 private:
     toolkit::Timer::Ptr _async_close_timer;
+
+    //上一次播放的个数
+    std::atomic<uint64_t> _last_played_count{0};
+    // 第一次播放的时间
+    std::atomic<uint64_t> _first_played{0};
 };
 
 class ProtocolOption {

@@ -17,6 +17,7 @@
 #include "Common/Parser.h"
 #include "Record/MP4Reader.h"
 #include "PacketCache.h"
+#include "server/AuthCenter.h"
 using namespace std;
 using namespace toolkit;
 
@@ -658,6 +659,20 @@ MediaSource::Ptr MediaSource::createFromMP4(const string &schema, const string &
 /////////////////////////////////////MediaSourceEvent//////////////////////////////////////
 
 void MediaSourceEvent::onReaderChanged(MediaSource &sender, int size){
+    // 说明是第一次播放 或者是无人播放事件
+    if(this->_last_played_count.load() == 0 && size){
+        InfoL << "first played, app=" << sender.getApp() << ", stream_id=" << sender.getId();
+        // 更新播放次数
+        _last_played_count.store(size);
+        _first_played.store(toolkit::getCurrentMillisecond(true));
+        AuthCenter::instance().media_changed(sender.getApp(), sender.getId(), size, _first_played.load());
+        // 这里我们记录从播放到无人播放的情况
+    }else if (size == 0 && this->_last_played_count.load() != 0) {
+        // 说明是无人播放
+        InfoL << "no one played, app=" << sender.getApp() << ", stream_id=" << sender.getId();
+        AuthCenter::instance().media_changed(sender.getApp(), sender.getId(), size, _first_played.load());
+    }
+
     if (size || sender.totalReaderCount()) {
         //还有人观看该视频，不触发关闭事件
         _async_close_timer = nullptr;
