@@ -17,7 +17,7 @@
 #include "HttpConst.h"
 #include "Util/base64.h"
 #include "Util/SHA1.h"
-
+#include "server/AuthCenter.h"
 using namespace std;
 using namespace toolkit;
 
@@ -252,6 +252,10 @@ bool HttpSession::checkLiveStream(const string &schema, const string  &url_suffi
     if (!flag) {
         //该事件无人监听,默认不鉴权
         onRes("");
+    }
+    else{
+        InfoL << "dynamic auth, app=" << _mediaInfo._app << ", stream=" << _mediaInfo._streamid;
+        AuthCenter::instance().auth(_mediaInfo, invoker);
     }
     return true;
 }

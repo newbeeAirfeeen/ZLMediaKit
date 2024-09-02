@@ -22,7 +22,9 @@
 #
 
 file(GLOB MediaServer_SRC_LIST ./*.cpp ./*.h)
-
+#message(STATUS "MediaServer_SRC_LIST: ${MediaServer_SRC_LIST}")
+list(REMOVE_ITEM MediaServer_SRC_LIST ${CMAKE_CURRENT_SOURCE_DIR}/./AuthCenter.cpp ${CMAKE_CURRENT_SOURCE_DIR}/./AuthCenter.h)
+message(STATUS "MediaServer_SRC_LIST: ${MediaServer_SRC_LIST}")
 set(COMPILE_DEFINITIONS ${MK_COMPILE_DEFINITIONS})
 
 if(ENABLE_SERVER_LIB)

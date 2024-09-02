@@ -17,7 +17,7 @@
 #include "Util/base64.h"
 #include "RtpMultiCaster.h"
 #include "Rtcp/RtcpContext.h"
-
+#include "server/AuthCenter.h"
 using namespace std;
 using namespace toolkit;
 
@@ -359,6 +359,9 @@ void RtspSession::emitOnPlay(){
     if (!flag) {
         //该事件无人监听,默认不鉴权
         onRes("");
+    }else{
+        InfoL << "dynamic auth, app= << " << _media_info._app << ", stream=" << _media_info._streamid;
+        AuthCenter::instance().auth(_media_info, invoker);
     }
     //已经鉴权过了
     _emit_on_play = true;

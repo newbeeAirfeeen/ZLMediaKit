@@ -32,6 +32,7 @@ public:
     void onRecv(const toolkit::Buffer::Ptr &buf) override;
     void onError(const toolkit::SockException &err) override;
     void onManager() override;
+protected:
 
 private:
     void onProcessCmd(AMFDecoder &dec);
@@ -101,6 +102,11 @@ private:
     RtmpMediaSourceImp::Ptr _push_src;
     std::shared_ptr<void> _push_src_ownership;
     RtmpMediaSource::RingType::RingReader::Ptr _ring_reader;
+
+    // 根据 streamproxy想实现的业务添加的字段
+    std::string _stream_proxy_session_id;
+    std::string _hook_url;
+
 };
 
 /**

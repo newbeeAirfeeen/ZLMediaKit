@@ -21,7 +21,7 @@
 #include "Common/Parser.h"
 #include "Common/config.h"
 #include "strCoding.h"
-
+#include "server/AuthCenter.h"
 using namespace std;
 using namespace toolkit;
 
@@ -195,6 +195,9 @@ static bool emitHlsPlayed(const Parser &parser, const MediaInfo &media_info, con
     if (!flag) {
         //未开启鉴权，那么允许播放
         auth_invoker("");
+    }else{
+        InfoL << "dynamic auth, app=" << media_info._app << ", stream_id=" << media_info._streamid;
+        AuthCenter::instance().auth(media_info, auth_invoker);
     }
     return flag;
 }
