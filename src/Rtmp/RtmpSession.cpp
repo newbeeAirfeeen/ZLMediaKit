@@ -382,15 +382,19 @@ void RtmpSession::doPlay(AMFDecoder &dec) {
         });
     };
 
+    auto media_info = _media_info;
+    decltype(invoker) next_invoker = [invoker, media_info](const std::string& err){
+        if(!err.empty()){
+            invoker(err);
+            return;
+        }
+        AuthCenter::instance().auth(media_info, invoker);
+    };
     auto flag = NoticeCenter::Instance().emitEvent(
-        Broadcast::kBroadcastMediaPlayed, _media_info, invoker, static_cast<SockInfo &>(*this));
+        Broadcast::kBroadcastMediaPlayed, _media_info, next_invoker, static_cast<SockInfo &>(*this));
     if (!flag) {
         // 该事件无人监听,默认不鉴权
         doPlayResponse("", [token](bool) {});
-    } else {
-        // 我们使用动态鉴权方式
-        InfoL << "use dynamic auth, app=" << _media_info._app << ", streamid=" << _media_info._streamid;
-        AuthCenter::instance().auth(_media_info, invoker);
     }
 }
 

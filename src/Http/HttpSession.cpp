@@ -248,14 +248,19 @@ bool HttpSession::checkLiveStream(const string &schema, const string  &url_suffi
         }
     };
 
-    auto flag = NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastMediaPlayed, _mediaInfo, invoker, static_cast<SockInfo &>(*this));
+    auto media_info = _mediaInfo;
+    decltype(invoker) next_invoker = [media_info, invoker](const std::string& err){
+        if(!err.empty()){
+            invoker(err);
+            return;
+        }
+        AuthCenter::instance().auth(media_info, invoker);
+    };
+
+    auto flag = NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastMediaPlayed, _mediaInfo, next_invoker, static_cast<SockInfo &>(*this));
     if (!flag) {
         //该事件无人监听,默认不鉴权
         onRes("");
-    }
-    else{
-        InfoL << "dynamic auth, app=" << _mediaInfo._app << ", stream=" << _mediaInfo._streamid;
-        AuthCenter::instance().auth(_mediaInfo, invoker);
     }
     return true;
 }

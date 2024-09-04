@@ -191,13 +191,19 @@ static bool emitHlsPlayed(const Parser &parser, const MediaInfo &media_info, con
         //cookie有效期为kHlsCookieSecond
         invoker(err, "", kHlsCookieSecond);
     };
-    bool flag = NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastMediaPlayed, media_info, auth_invoker, static_cast<SockInfo &>(sender));
+    auto _media_info = media_info;
+    decltype(auth_invoker) next_invoke = [auth_invoker, _media_info](const std::string& err){
+        if(!err.empty()){
+            auth_invoker(err);
+            return;
+        }
+        AuthCenter::instance().auth(_media_info, auth_invoker);
+    };
+
+    bool flag = NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastMediaPlayed, media_info, next_invoke, static_cast<SockInfo &>(sender));
     if (!flag) {
         //未开启鉴权，那么允许播放
         auth_invoker("");
-    }else{
-        InfoL << "dynamic auth, app=" << media_info._app << ", stream_id=" << media_info._streamid;
-        AuthCenter::instance().auth(media_info, auth_invoker);
     }
     return flag;
 }
