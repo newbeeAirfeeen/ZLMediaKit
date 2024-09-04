@@ -353,15 +353,21 @@ void RtspSession::emitOnPlay(){
             onRes(err);
         });
     };
+    auto media_info = _media_info;
+    decltype(invoker) next_invoker = [invoker, media_info](const std::string& err){
+        if(!err.empty()){
+            invoker(err);
+            return;
+        }
+        AuthCenter::instance().auth(media_info, invoker);
+    };
+
 
     //广播通用播放url鉴权事件
-    auto flag = _emit_on_play ? false : NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastMediaPlayed, _media_info, invoker, static_cast<SockInfo &>(*this));
+    auto flag = _emit_on_play ? false : NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastMediaPlayed, _media_info, next_invoker, static_cast<SockInfo &>(*this));
     if (!flag) {
         //该事件无人监听,默认不鉴权
         onRes("");
-    }else{
-        InfoL << "dynamic auth, app=" << _media_info._app << ", stream=" << _media_info._streamid;
-        AuthCenter::instance().auth(_media_info, invoker);
     }
     //已经鉴权过了
     _emit_on_play = true;

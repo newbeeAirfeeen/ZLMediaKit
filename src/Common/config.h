@@ -105,6 +105,9 @@ extern const std::string kBroadcastSendRtpStopped;
 extern const std::string kBroadcastReloadConfig;
 #define BroadcastReloadConfigArgs void
 
+extern const std::string kBroadcastRtmpPushHooked;
+#define BroadcastRtmpPushHookedArgs const std::string &cmd, const Json::Value &data, const std::string &hook_url, const std::string &session_id, const Broadcast::AuthInvoker &invoker
+
 // rtp server 超时
 extern const std::string KBroadcastRtpServerTimeout;
 #define BroadcastRtpServerTimeout uint16_t &local_port, const string &stream_id,int &tcp_mode, bool &re_use_port, uint32_t &ssrc
