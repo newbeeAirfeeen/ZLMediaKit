@@ -19,6 +19,7 @@ void AuthCenter::regist_auth(const mediakit::MediaInfo &info, const std::string 
     AuthEntry entry;
     entry._url = url;
     entry._session_id = session_id;
+    _auth_entry_map[key] = entry;
 }
 void AuthCenter::unreigst_auth(const mediakit::MediaInfo &info) {
     auto key = generate_key(info);
@@ -50,7 +51,7 @@ auto AuthCenter::auth(const mediakit::MediaInfo &info, const mediakit::Broadcast
             InfoL << "app=" << info._app << ", stream_id=" << info._streamid
                   << ", auth response:" << response.Content();
             if (ex) {
-                invoker("hook failed...");
+                invoker(ex.what());
                 return;
             }
             Json::Value result;
@@ -67,7 +68,7 @@ auto AuthCenter::auth(const mediakit::MediaInfo &info, const mediakit::Broadcast
             }
             invoker("");
         },
-        2.0);
+        10.0);
     return true;
 }
 auto AuthCenter::media_changed(const std::string &app, const std::string &id, int reader_count, uint64_t first_played)
@@ -84,7 +85,7 @@ auto AuthCenter::media_changed(const std::string &app, const std::string &id, in
     Json::Value value;
     value["type"] = "media_changed";
     value["session_id"] = it->second._session_id;
-    value["total_reader"] = reader_count;
+    value["total_reader"] = static_cast<uint64_t>(reader_count);
     value["first_player_created"] = first_played;
     requester->setMethod("POST");
     requester->setBody(value.toStyledString());
@@ -97,7 +98,7 @@ auto AuthCenter::media_changed(const std::string &app, const std::string &id, in
                 return;
             }
         },
-        2.0);
+        10.0);
     return true;
 }
 std::string AuthCenter::generate_key(const mediakit::MediaInfo &info) {
