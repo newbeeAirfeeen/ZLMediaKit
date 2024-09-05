@@ -30,8 +30,10 @@ auto AuthCenter::auth(const mediakit::MediaInfo &info, const mediakit::Broadcast
     std::lock_guard<std::mutex> lck(_mtx);
     auto it = _auth_entry_map.find(key);
     if (it == _auth_entry_map.end()) {
-        InfoL << "动态鉴权中心无人鉴权";
-        invoker("");
+        EventPollerPool::Instance().getPoller(false)->async([invoker]() {
+            InfoL << "动态鉴权中心无人鉴权";
+            invoker("");
+        });
         return false;
     }
     auto uri = it->second._url;
