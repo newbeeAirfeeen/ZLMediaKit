@@ -670,6 +670,7 @@ void MediaSourceEvent::onReaderChanged(MediaSource &sender, int size){
     }else if (size == 0 && this->_last_played_count.load() != 0) {
         // 说明是无人播放
         InfoL << "no one played, app=" << sender.getApp() << ", stream_id=" << sender.getId();
+        this->_last_played_count.store(size);
         AuthCenter::instance().media_changed(sender.getApp(), sender.getId(), size, _first_played.load());
     }
 
