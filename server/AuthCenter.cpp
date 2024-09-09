@@ -34,7 +34,7 @@ auto AuthCenter::auth(const mediakit::MediaInfo &info, const mediakit::Broadcast
         EventPollerPool::Instance().getPoller(false)->async([invoker]() {
             InfoL << "动态鉴权中心无人鉴权";
             invoker("");
-        });
+        }, false);
         return false;
     }
     auto uri = it->second._url;
