@@ -88,9 +88,6 @@ void HlsMaker::inputData(void *data, size_t len, uint64_t timestamp, bool is_idr
         }
         if (is_idr_fast_packet) {
             // 尝试切片ts
-            TraceL << "[" << this << "]: "
-                   << "idr fast packet"
-                   << ", timestamp: " << timestamp;
             addNewSegment(timestamp);
         }
         if (!_last_file_name.empty()) {
@@ -130,9 +127,10 @@ void HlsMaker::addNewSegment(uint64_t stamp, bool use_fmp4 /*=false*/) {
         return;
     }
 
-    if (stamp - _last_timestamp >= 10 * 1000) {
+    if (stamp - _last_seg_timestamp >= 8 * 1000) {
         TraceL << "[" << this << "]: "
-               << "duration: " << stamp - _last_timestamp << ", last: " << _last_timestamp << ", now: " << stamp;
+               << "duration: " << stamp - _last_seg_timestamp << ", last: " << _last_seg_timestamp
+               << ", now: " << stamp;
     }
 
     // 关闭并保存上一个切片，如果_seg_number==0,那么是点播。
@@ -154,6 +152,7 @@ void HlsMaker::onSegmentData(std::string string, uint64_t stamp, bool key_frame)
         //  WarnL << "stamp reduce: " << _last_timestamp << " -> " << stamp;
         //  _last_seg_timestamp = _last_timestamp = stamp;
     }
+
     if (key_frame) {
         // 如果清空了init.mp4,或者init文件不存在,则重新生成
         if (_init_file_name.empty() || (!_init_file_name.empty() && !fileExist(_init_file_name))) {
@@ -162,6 +161,8 @@ void HlsMaker::onSegmentData(std::string string, uint64_t stamp, bool key_frame)
                 onWriteSegment((char *)_init_segment.data(), _init_segment.length());
             }
         }
+        TraceL << "[" << this << "]"
+               << ": stamp=" << stamp << ", key=" << key_frame;
         // 尝试切片ts
         addNewSegment(stamp, true);
     }
