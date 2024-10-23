@@ -19,8 +19,6 @@ HlsMaker::HlsMaker(float seg_duration, uint32_t seg_number, bool seg_keep) {
     _seg_number = seg_number;
     _seg_duration = seg_duration;
     _seg_keep = seg_keep;
-    TraceL << "created HlsMaker, seg_duration:" << seg_duration << ", seg_number:" << seg_number
-           << ", seg_keep:" << seg_keep;
 }
 
 HlsMaker::~HlsMaker() {}
@@ -35,7 +33,6 @@ void HlsMaker::makeIndexFile(bool eof) {
             maxSegmentDuration = dur;
         }
     }
-    TraceL << "maxSegmentDuration:" << maxSegmentDuration;
     auto sequence = _seg_number ? (_file_index > _seg_number ? _file_index - _seg_number : 0LL) : 0LL;
 
     string m3u8;
@@ -91,6 +88,9 @@ void HlsMaker::inputData(void *data, size_t len, uint64_t timestamp, bool is_idr
         }
         if (is_idr_fast_packet) {
             // 尝试切片ts
+            TraceL << "[" << this << "]: "
+                   << "idr fast packet"
+                   << ", timestamp: " << timestamp;
             addNewSegment(timestamp);
         }
         if (!_last_file_name.empty()) {
@@ -129,8 +129,12 @@ void HlsMaker::addNewSegment(uint64_t stamp, bool use_fmp4 /*=false*/) {
         // 存在上个切片，并且未到分片时间
         return;
     }
-    TraceL << "create new segment, "
-           << "last_seg_timestamp: " << _last_seg_timestamp << "stamp:" << stamp << ", seg_dur:" << _seg_duration;
+
+    if (stamp - _last_timestamp >= 10 * 1000) {
+        TraceL << "[" << this << "]: "
+               << "duration: " << stamp - _last_timestamp << ", last: " << _last_timestamp << ", now: " << stamp;
+    }
+
     // 关闭并保存上一个切片，如果_seg_number==0,那么是点播。
     flushLastSegment(false);
     // 新增切片
