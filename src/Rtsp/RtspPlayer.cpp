@@ -434,7 +434,7 @@ void RtspPlayer::sendPause(int type , uint32_t seekMS){
         case type_play:
             //sendRtspRequest("PLAY", _content_base);
             sendRtspRequest(
-                    "PLAY", _control_url,
+                    "PLAY", _content_base,
                     { "Range", StrPrinter << "clock=20241213T141034Z-20241213T141529Z", "Scale", StrPrinter << "1.000000", "Speed", StrPrinter << "1.000000" });
 
 
