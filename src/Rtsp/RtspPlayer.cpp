@@ -432,7 +432,12 @@ void RtspPlayer::sendPause(int type , uint32_t seekMS){
             sendRtspRequest("PAUSE", _content_base);
             break;
         case type_play:
-            sendRtspRequest("PLAY", _content_base);
+            //sendRtspRequest("PLAY", _content_base);
+            sendRtspRequest(
+                    "PLAY", _control_url,
+                    { "Range", StrPrinter << "clock=20241213T141034Z-20241213T141529Z", "Scale", StrPrinter << "1.000000", "Speed", StrPrinter << "1.000000" });
+
+
             break;
         case type_seek:
             sendRtspRequest("PLAY", _content_base, {"Range",StrPrinter << "npt=" << setiosflags(ios::fixed) << setprecision(2) << seekMS / 1000.0 << "-"});
