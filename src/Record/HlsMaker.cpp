@@ -52,7 +52,7 @@ void HlsMaker::makeIndexFile(bool eof) {
             "#EXTM3U\n"
             "#EXT-X-VERSION:7\n"
             "#EXT-X-INDEPENDENT-SEGMENTS\n"
-            "#EXT-X-ALLOW-CACHE:NO\n"
+            "#EXT-X-ALLOW-CACHE:YES\n"
             "#EXT-X-TARGETDURATION:%u\n"
             "#EXT-X-MEDIA-SEQUENCE:%llu\n",
             (maxSegmentDuration + 999) / 1000, sequence);
