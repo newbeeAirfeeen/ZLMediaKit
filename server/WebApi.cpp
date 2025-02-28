@@ -668,9 +668,9 @@ void installWebApi() {
 
     //获取服务器api列表
     //测试url http://127.0.0.1/index/
-//    api_regist("/index/",[](API_ARGS_MAP){
-//        s_get_api_list(API_ARGS_VALUE);
-//    });
+    api_regist("/index/",[](API_ARGS_MAP){
+        s_get_api_list(API_ARGS_VALUE);
+    });
 
 #if !defined(_WIN32)
     //重启服务器,只有Daemon方式才能重启，否则是直接关闭！
