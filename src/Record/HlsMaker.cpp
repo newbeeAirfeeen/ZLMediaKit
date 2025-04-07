@@ -47,6 +47,7 @@ void HlsMaker::makeIndexFile(bool eof) {
             "#EXT-X-MEDIA-SEQUENCE:%llu\n",
             (maxSegmentDuration + 999) / 1000, sequence);
     } else {
+
         snprintf(
             file_content, sizeof(file_content),
             "#EXTM3U\n"
