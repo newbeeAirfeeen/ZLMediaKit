@@ -309,6 +309,22 @@ static mINI jsonToMini(const Value &obj) {
     return ret;
 }
 
+
+auto is_private_ipv4(const std::string& ip) -> bool {
+    // 分割字符串获取每个部分
+    int part[4] = {0};
+    auto ret = sscanf(ip.c_str(), "%d.%d.%d.%d", &part[0], &part[1], &part[2], &part[3]);
+    if(ret != 4) {
+        return false;
+    }
+    // 检查是否属于私有IP范围
+    if (part[0] == 10) return true; // 10.0.0.0 - 10.255.255.255
+    if (part[0] == 172 && (part[1] >= 16 && part[1] <= 31)) return true; // 172.16.0.0 - 172.31.255.255
+    if (part[0] == 192 && part[1] == 168) return true; // 192.168.0.0 - 192.168.255.255
+    return false;
+}
+
+
 void installWebHook(){
     GET_CONFIG(bool,hook_enable,Hook::kEnable);
     GET_CONFIG(string,hook_adminparams,Hook::kAdminParams);
@@ -319,6 +335,13 @@ void installWebHook(){
             invoker("", ProtocolOption());
             return;
         }
+
+        if(!is_private_ipv4(sender.get_peer_ip())){
+            //私有IP不允许推流
+            invoker("ip not allowed", ProtocolOption());
+            return;
+        }
+
         //异步执行该hook api，防止阻塞NoticeCenter
         auto body = make_json(args);
         body["ip"] = sender.get_peer_ip();
