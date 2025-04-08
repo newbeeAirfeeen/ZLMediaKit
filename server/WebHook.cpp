@@ -330,15 +330,15 @@ void installWebHook(){
     GET_CONFIG(string,hook_adminparams,Hook::kAdminParams);
 
     NoticeCenter::Instance().addListener(&web_hook_tag, Broadcast::kBroadcastMediaPublish, [](BroadcastMediaPublishArgs) {
-        GET_CONFIG(string,hook_publish,Hook::kOnPublish);
-        if (!hook_enable || args._param_strs == hook_adminparams || hook_publish.empty() || sender.get_peer_ip() == "127.0.0.1") {
-            invoker("", ProtocolOption());
-            return;
-        }
-
         if(!is_private_ipv4(sender.get_peer_ip())){
             //私有IP不允许推流
             invoker("ip not allowed", ProtocolOption());
+            return;
+        }
+
+        GET_CONFIG(string,hook_publish,Hook::kOnPublish);
+        if (!hook_enable || args._param_strs == hook_adminparams || hook_publish.empty() || sender.get_peer_ip() == "127.0.0.1") {
+            invoker("", ProtocolOption());
             return;
         }
 

@@ -537,6 +537,10 @@ void HttpFileManager::onAccessPath(Session &sender, Parser &parser, const HttpFi
     auto file_path = getFilePath(parser, media_info, sender);
     //访问的是文件夹
     if (File::is_dir(file_path.data())) {
+#if 1
+        sendNotFound(cb);
+        return;
+#else
         auto indexFile = searchIndexFile(file_path);
         if (!indexFile.empty()) {
             //发现该文件夹下有index文件
@@ -564,6 +568,7 @@ void HttpFileManager::onAccessPath(Session &sender, Parser &parser, const HttpFi
             cb(err_msg.empty() ? 200 : 401, "text/html", headerOut, std::make_shared<HttpStringBody>(strMenu));
         });
         return;
+#endif
     }
 
     //访问的是文件
