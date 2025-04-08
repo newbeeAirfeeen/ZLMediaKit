@@ -265,6 +265,14 @@ static void canAccessPath(Session &sender, const Parser &parser, const MediaInfo
         update_cookie = true;
     }
 
+
+//    auto index = uid.find("token=");
+//    if(index== std::string::npos){
+//        callback("token参数不存在", nullptr);
+//        return;
+//    }
+
+
     if (cookie) {
         auto& attach = cookie->getAttach<HttpCookieAttachment>();
         if (path.find(attach._path) == 0) {
@@ -373,6 +381,18 @@ static void accessFile(Session &sender, const Parser &parser, const MediaInfo &m
         sendNotFound(cb);
         return;
     }
+
+    if (is_hls){
+        auto query = parser.Params();
+        auto token = query.find("token=");
+        if (token == std::string::npos) {
+            //没有token参数，直接返回404
+            TraceL << "没有token参数，无法访问hls文件:" << file_path;
+            sendNotFound(cb);
+            return;
+        }
+    }
+
     if (is_hls) {
         // hls，那么移除掉后缀获取真实的stream_id并且修改协议为HLS
         const_cast<string &>(media_info._schema) = HLS_SCHEMA;
@@ -440,14 +460,14 @@ static void accessFile(Session &sender, const Parser &parser, const MediaInfo &m
             // 直接从内存获取m3u8索引文件(而不是从文件系统)
             response_file(cookie, cb, file_path, parser, src->getIndexFile());
             return;
-        } 
+        }
 
         // InfoL << "filepath:" << file_path << "cookie file path:" << attach._path;
         if (attach._find_src && attach._find_src_ticker.elapsedTime() < kFindSrcIntervalSecond * 1000) {
             // 最近已经查找过MediaSource了，为了防止频繁查找导致占用全局互斥锁的问题，我们尝试直接从磁盘返回hls索引文件
             response_file(cookie, cb, file_path, parser);
             return;
-        } 
+        }
 
         //hls流可能未注册，MediaSource::findAsync可以触发not_found事件，然后再按需推拉流
         MediaSource::findAsync(media_info, strongSession, [response_file, cookie, cb, file_path, parser](const MediaSource::Ptr &src) {
