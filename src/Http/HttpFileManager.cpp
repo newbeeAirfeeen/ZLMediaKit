@@ -383,7 +383,7 @@ static void accessFile(Session &sender, const Parser &parser, const MediaInfo &m
     }
 
     if (is_hls){
-        auto query = parser.Params();
+        const auto& query = parser.Params();
         auto token = query.find("token=");
         if (token == std::string::npos) {
             //没有token参数，直接返回404
