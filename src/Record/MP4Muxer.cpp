@@ -114,8 +114,8 @@ bool MP4MuxerInterface::inputFrame(const Frame::Ptr &frame) {
                                  track_info.track_id,
                                  buffer->data(),
                                  buffer->size(),
-                                 pts_out,
-                                 dts_out,
+                                 pts,
+                                 dts,
                                  have_idr ? MOV_AV_FLAG_KEYFREAME : 0);
             });
             break;
@@ -128,8 +128,8 @@ bool MP4MuxerInterface::inputFrame(const Frame::Ptr &frame) {
                              track_info.track_id,
                              frame->data() + frame->prefixSize(),
                              frame->size() - frame->prefixSize(),
-                             pts_out,
-                             dts_out,
+                             frame->pts(),
+                             frame->dts(),
                              frame->keyFrame() ? MOV_AV_FLAG_KEYFREAME : 0);
             break;
         }
