@@ -311,6 +311,9 @@ static mINI jsonToMini(const Value &obj) {
 
 
 auto is_private_ipv4(const std::string& ip) -> bool {
+    if(ip == "127.0.0.1"){
+        return true;
+    }
     // 分割字符串获取每个部分
     int part[4] = {0};
     auto ret = sscanf(ip.c_str(), "%d.%d.%d.%d", &part[0], &part[1], &part[2], &part[3]);
