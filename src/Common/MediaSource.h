@@ -161,6 +161,8 @@ public:
     bool enable_fmp4;
     //是否开启转换为webrtc
     bool enable_rtc;
+    // 在 hls 开启的时候，强制使用 fmp4或ts 协议
+    int use_fmp4_or_ts;
     // 是否启用音频转码
     bool audio_transcode;
     bool rtc_demand;

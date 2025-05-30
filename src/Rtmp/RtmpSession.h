@@ -106,6 +106,8 @@ private:
     // 根据 streamproxy想实现的业务添加的字段
     std::string _stream_proxy_session_id;
     std::string _hook_url;
+    // 0. 默认，1. 使用fmp4格式，2. 使用ts格式
+    int _use_fmp4_or_ts = 0;
 
 };
 

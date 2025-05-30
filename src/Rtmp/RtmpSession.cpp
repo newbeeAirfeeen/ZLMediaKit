@@ -103,6 +103,7 @@ void RtmpSession::onCmd_connect(AMFDecoder &dec) {
     }
 
     try {
+        this->_use_fmp4_or_ts = params["useFmp4OrTs"].as_integer();
         this->_hook_url = params["hookUrl"].as_string();
         this->_stream_proxy_session_id = params["sessionId"].as_string();
     } catch (const std::exception &e) {
@@ -152,7 +153,8 @@ void RtmpSession::onCmd_publish(AMFDecoder &dec) {
     }
 
     auto now_stream_index = _now_stream_index;
-    auto on_res = [this, token, now_stream_index](const string &err, const ProtocolOption &option) {
+    auto use_fmp4_or_ts = _use_fmp4_or_ts;
+    auto on_res = [this, token, now_stream_index, use_fmp4_or_ts](const string &err, const ProtocolOption &option) {
         _now_stream_index = now_stream_index;
         if (!err.empty()) {
             sendStatus({ "level", "error", "code", "NetStream.Publish.BadAuth", "description", err, "clientid", "0" });
@@ -190,6 +192,7 @@ void RtmpSession::onCmd_publish(AMFDecoder &dec) {
         }
 
         if (!_push_src) {
+            const_cast<ProtocolOption&>(option).use_fmp4_or_ts = use_fmp4_or_ts;
             _push_src
                 = std::make_shared<RtmpMediaSourceImp>(_media_info._vhost, _media_info._app, _media_info._streamid);
             // 获取所有权
