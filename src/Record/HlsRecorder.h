@@ -80,6 +80,7 @@ public:
 
     bool addTrack(const Track::Ptr & track) override
     {
+        _hls->addTrack(track);
         if (track->getTrackType() == TrackVideo) {
             // 默认情况下265使用fmp4
             if (track->getCodecId() == CodecH265) {
@@ -96,9 +97,9 @@ public:
                 default:
                     break;
             }
+            _hls->set_use_fmp4(_use_fmp4);
         }
         MpegMuxer::addTrack(track);
-        _hls->addTrack(track);
         return true;
     }
 

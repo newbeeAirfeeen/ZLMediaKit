@@ -69,6 +69,9 @@ public:
         }
     }
     void resetTracks() { MP4MuxerMemory::resetTracks(); }
+    void set_use_fmp4(bool use) {
+        use_fmp4 = use;
+    }
 
 protected:
     /**
