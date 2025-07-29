@@ -42,6 +42,7 @@ auto AuthCenter::auth(const mediakit::MediaInfo &info, const mediakit::Broadcast
     Json::Value value;
     value["type"] = "auth";
     value["session_id"] = it->second._session_id;
+    value["url"] = info._full_url;
     requester->setMethod("POST");
     requester->setBody(value.toStyledString());
     requester->addHeader("Content-Type", "application/json");
