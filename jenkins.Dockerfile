@@ -7,7 +7,7 @@ RUN sed -i 's|mirrorlist.centos.org|vault.centos.org|g' /etc/yum.repos.d/CentOS-
     yum makecache \
 RUN yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
 # 安装依赖项
-RUN yum update -y && yum install -y gcc gcc-c++ make curl tar wget unzip git
+RUN yum update -y && yum install -y gcc gcc-c++ make curl tar wget unzip git perl-IPC-Cmd
 
 # 创建 jenkins 用户和家目录
 RUN useradd -m jenkins
