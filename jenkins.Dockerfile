@@ -9,24 +9,24 @@ RUN yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-re
 # 安装依赖项
 RUN yum update -y && yum install -y gcc gcc-c++ make curl tar wget unzip git perl-IPC-Cmd
 
-# 创建 jenkins 用户和家目录
-RUN useradd -m jenkins
-USER jenkins
+
 WORKDIR /opt
 RUN wget https://github.com/openssl/openssl/releases/download/openssl-3.2.1/openssl-3.2.1.tar.gz && \
     tar -zxvf openssl-3.2.1.tar.gz && \
     cd openssl-3.2.1 && \
     ./config && \
     make -j$(nproc)  && \
-    make --install
+    make install
 
 RUN wget https://github.com/Kitware/CMake/archive/refs/tags/v3.28.0.zip && \
     unzip v3.28.0.zip && \
     cd CMake-3.28.0 && \
     ./bootstrap && \
     make -j$(nproc) && \
-    make install \
-
+    make install
+# 创建 jenkins 用户和家目录
+RUN useradd -m jenkins
+USER jenkins
 WORKDIR /home/jenkins
 # 安装 Rust
 #RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
