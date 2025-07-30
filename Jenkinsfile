@@ -16,7 +16,7 @@ pipeline {
         stage('Build'){
             steps{
                 script {
-                    def archive_name = "ZLMediakit-fmp4-${env.NODE_NAME}.${env.BUILD_ID}.${env.GIT_COMMIT}.tar.gz";
+                    def archive_name = "ZLMediakit-fmp4-${env.NODE_NAME}.${env.BUILD_ID}.${env.GIT_COMMIT}.tar.gz"
                     sh "cmake -B build -DCMAKE_BUILD_TYPE=Release"
                     sh '''
                            cmake --build build -- -j $(nproc)
@@ -35,6 +35,7 @@ pipeline {
         stage('Archive') {
             steps {
                 script{
+                    def archive_name = "ZLMediakit-fmp4-${env.NODE_NAME}.${env.BUILD_ID}.${env.GIT_COMMIT}.tar.gz"
                     archiveArtifacts artifacts: "target/${archive_name}", followSymlinks: false, onlyIfSuccessful: true
                 }
             }
