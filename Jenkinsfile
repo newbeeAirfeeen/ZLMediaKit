@@ -21,7 +21,6 @@ pipeline {
                     sh '''
                            cmake --build build -- -j $(nproc)
                        '''
-                    sh "cmake --install build"
                     sh "mkdir -p temp"
 
                     sh "cp ${WORKSPACE}/release/linux/Release/MediaServer temp/MediaServer"
