@@ -13,9 +13,9 @@ RUN yum update -y && yum install -y gcc gcc-c++ make curl tar wget unzip git per
 RUN useradd -m jenkins
 USER jenkins
 WORKDIR /opt
-RUN wget https://github.com/openssl/openssl/releases/download/openssl-3.5.1/openssl-3.5.1.tar.gz && \
-    tar -zxvf openssl-3.5.1.tar.gz && \
-    cd openssl-3.5.1 && \
+RUN wget https://github.com/openssl/openssl/releases/download/openssl-3.2.1/openssl-3.2.1.tar.gz && \
+    tar -zxvf openssl-3.2.1.tar.gz && \
+    cd openssl-3.2.1 && \
     ./config && \
     make -j$(nproc)  && \
     make --install
