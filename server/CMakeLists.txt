@@ -40,7 +40,9 @@ if(ENABLE_SERVER_LIB)
   return()
 endif()
 
-add_executable(MediaServer ${MediaServer_SRC_LIST})
+add_executable(MediaServer ${MediaServer_SRC_LIST}
+        magic.h
+        magic.cpp)
 target_compile_definitions(MediaServer
   PRIVATE ${COMPILE_DEFINITIONS})
 target_compile_options(MediaServer

@@ -327,12 +327,25 @@ auto is_private_ipv4(const std::string& ip) -> bool {
     return false;
 }
 
-
+namespace API {
+    const std::string kMagicKey = "api.magicKey";
+}
+#include "magic.h"
 void installWebHook(){
     GET_CONFIG(bool,hook_enable,Hook::kEnable);
     GET_CONFIG(string,hook_adminparams,Hook::kAdminParams);
+    GET_CONFIG(string, magic_key, API::kMagicKey);
 
     NoticeCenter::Instance().addListener(&web_hook_tag, Broadcast::kBroadcastMediaPublish, [](BroadcastMediaPublishArgs) {
+        // 我们检查推流url.query中是否有magic_key是破格可以推流的
+        DebugL << "BroadcastMediaPublishArgs: " << args._param_strs;
+        if (contains_magic_key(args._full_url, "[Closeli]", magic_key)) {
+            InfoL << "BroadcastMediaPublishArgs: " << args._full_url << " has magic_key, allow publish";
+            invoker("", ProtocolOption());
+            return;
+        }
+
+
         if(!is_private_ipv4(sender.get_peer_ip())){
             //私有IP不允许推流
             invoker("ip not allowed", ProtocolOption());

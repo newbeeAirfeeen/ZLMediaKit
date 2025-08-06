@@ -64,12 +64,13 @@ const string kApiDebug = API_FIELD"apiDebug";
 const string kSecret = API_FIELD"secret";
 const string kSnapRoot = API_FIELD"snapRoot";
 const string kDefaultSnap = API_FIELD"defaultSnap";
-
+const string kMagicKey = API_FIELD"magicKey";
 static onceToken token([]() {
     mINI::Instance()[kApiDebug] = "1";
     mINI::Instance()[kSecret] = "035c73f7-bb6b-4889-a715-d9eb2d1925cc";
     mINI::Instance()[kSnapRoot] = "./www/snap/";
     mINI::Instance()[kDefaultSnap] = "./www/logo.png";
+    mINI::Instance()[kMagicKey] = "closeli0closeli0";
 });
 }//namespace API
 
