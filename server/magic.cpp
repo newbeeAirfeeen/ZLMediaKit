@@ -51,22 +51,22 @@ static std::string aes_decrypt(const std::string& b64cipher, const std::string& 
     EVP_CIPHER_CTX_free(ctx);
     return plaintext;
 }
-
+static std::string get_magic_key(const std::string& url) {
+    std::string key = "magic_key=";
+    auto pos = url.find(key);
+    if (pos == std::string::npos) return {};
+    pos += key.size();
+    auto end = url.find('&', pos);
+    if (end == std::string::npos) end = url.size();
+    return url.substr(pos, end - pos);
+}
 #endif
 auto contains_magic_key(const std::string& url, const std::string& target, const std::string& key) -> bool {
 #if defined(ENABLE_OPENSSL)
-    std::regex re(R"(^.*[?&]magic_key=([^&]+).*)");
-    std::smatch match;
-
-    if (!std::regex_search(url, match, re)) {
+    std::string magic_key = get_magic_key(url);
+    if(magic_key.empty()) {
         return false;
     }
-
-    if (match.size() <= 1) {
-        return false;
-    }
-
-    std::string magic_key = match[1].str();
     auto decoded_key = aes_decrypt(magic_key, key);
     auto it = decoded_key.find(target);
     return it != std::string::npos;
