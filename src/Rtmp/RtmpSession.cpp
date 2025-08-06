@@ -98,7 +98,11 @@ void RtmpSession::onCmd_connect(AMFDecoder &dec) {
         auto pos = _tc_url.rfind('?');
         if (pos != string::npos) {
             // tc_url 中可能包含?以及参数，参见issue: #692
+            if (pos + 1 < _tc_url.size()){
+                _media_info._param_strs = _tc_url.substr(pos + 1);
+            }
             _tc_url = _tc_url.substr(0, pos);
+
         }
     }
 
