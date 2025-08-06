@@ -7,6 +7,7 @@
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
 #include <regex>
+#include <cstring>
 // Base64 解码
 static std::string base64_decode(const std::string& encoded) {
     BIO* bio, *b64;
