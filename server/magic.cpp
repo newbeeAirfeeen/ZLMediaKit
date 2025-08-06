@@ -55,7 +55,7 @@ static std::string aes_decrypt(const std::string& b64cipher, const std::string& 
 #endif
 auto contains_magic_key(const std::string& url, const std::string& target, const std::string& key) -> bool {
 #if defined(ENABLE_OPENSSL)
-    std::regex re(R"([?&]magic_key=([^&]+))");
+    std::regex re(R"(^.*[?&]magic_key=([^&]+).*)");
     std::smatch match;
 
     if (!std::regex_search(url, match, re)) {
