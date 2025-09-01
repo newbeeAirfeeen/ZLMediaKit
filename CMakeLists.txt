@@ -58,6 +58,26 @@ option(USE_SOLUTION_FOLDERS "Enable solution dir supported" ON)
 
 ##############################################################################
 
+
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
+  message(STATUS "CMAKE_C_COMPILER_ID: ${CMAKE_C_COMPILER_ID}")
+  add_compile_options(-ftrapv -D_FORTIFY_SOURCE=2 -O2 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -std=c++11)
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)  # 启用 PIE
+  add_compile_options(-fstack-protector-strong)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,now")
+
+  # 全局设置对于所有共享库
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,now")
+  #set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,relro,-z,now")
+  #set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,noexecstack")
+  #set(CMAKE_STRIP_OPTION "-s")
+  #set_target_properties(${PROJECT_NAME} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
+
+else()
+  message(WARNING "Not using GCC or Clang compiler. Security options are not enabled.")
+endif()
+
+
 if("${CMAKE_BUILD_TYPE}" STREQUAL "")
   set(CMAKE_BUILD_TYPE "Debug")
 endif()
