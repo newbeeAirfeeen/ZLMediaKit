@@ -48,7 +48,37 @@
 using namespace std;
 using namespace toolkit;
 using namespace mediakit;
-
+static size_t case_insensitive_find(const std::string& source, const std::string& target) {
+    auto it = std::search(source.begin(), source.end(), target.begin(), target.end(),
+        [](char ch1, char ch2) {
+        return std::tolower(static_cast<unsigned char>(ch1)) == std::tolower(static_cast<unsigned char>(ch2));
+    });
+    if (it != source.end()) {
+        return std::distance(source.begin(), it);
+    }
+    return std::string::npos;
+}
+auto logger_key_filter(string& key) -> std::string {
+    static std::vector<std::string> KEYWORDS = {"sig","sign","signature","token","auth","session","secret","password","rsa","aes","mobile","mail","pass_word","sigArray","jwt","pwd","privatekey","key","passId", "pass_id","uid","userId","gwIp","gw_ip","username","phone","address","app_key","appkey", "info","unifiedId","mail","@",".com","test","12345","oken","key","auth","signature","RedisPassword","ApiSecret","AccessSecret" ,"Token","CloudToken","token","sessionid","mail","@",".com","test", "12345", "oken","key","auth","signature","RedisPassword","ApiSecret","AccessSecret","Token","CloudToken", "token","sessionid","Key" };
+    for (const std::string& keyword : KEYWORDS) {
+        size_t pos = 0;
+        while ((pos = case_insensitive_find(key.substr(pos), keyword)) != std::string::npos) {
+            pos += pos; // 调整到原字符串中的位置
+            key.replace(pos, keyword.size(), keyword.size(), '*');
+            pos += keyword.size(); // 移动到替换后的位置继续搜索
+        }
+    }
+    return key;
+}
+class AsyncLogWriterFilter: public AsyncLogWriter {
+protected:
+    void write(const LogContextPtr &ctx, Logger &logger) override {
+        auto content = ctx->str();
+        auto filter_content = logger_key_filter(content);
+        ctx->_content = filter_content;
+        AsyncLogWriter::write(ctx, logger);
+    }
+};
 namespace mediakit {
 ////////////HTTP配置///////////
 namespace Http {
@@ -228,7 +258,7 @@ int start_main(int argc,char *argv[]) {
 #endif//!defined(_WIN32)
 
         //启动异步日志线程
-        Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
+        Logger::Instance().setWriter(std::make_shared<AsyncLogWriterFilter>());
 
         InfoL << kServerName;
 
@@ -398,6 +428,11 @@ int start_main(int argc,char *argv[]) {
     InfoL << "程序退出完毕!";
     return 0;
 }
+
+
+
+
+
 
 #ifndef DISABLE_MAIN
 int main(int argc,char *argv[]) {
