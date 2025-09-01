@@ -70,14 +70,18 @@ auto logger_key_filter(string& key) -> std::string {
     }
     return key;
 }
-class AsyncLogWriterFilter: public AsyncLogWriter {
-protected:
+class AsyncLogWriterFilter: public LogWriter {
+public:
+    explicit AsyncLogWriterFilter(const std::shared_ptr<LogWriter>& writer):writer(writer){}
+public:
     void write(const LogContextPtr &ctx, Logger &logger) override {
         auto content = ctx->str();
         auto filter_content = logger_key_filter(content);
         ctx->_content = filter_content;
-        AsyncLogWriter::write(ctx, logger);
+        writer->write(ctx, logger);
     }
+private:
+    std::shared_ptr<LogWriter> writer;
 };
 namespace mediakit {
 ////////////HTTP配置///////////
@@ -258,7 +262,7 @@ int start_main(int argc,char *argv[]) {
 #endif//!defined(_WIN32)
 
         //启动异步日志线程
-        Logger::Instance().setWriter(std::make_shared<AsyncLogWriterFilter>());
+        Logger::Instance().setWriter(std::make_shared<AsyncLogWriterFilter>(std::make_shared<AsyncLogWriter>()));
 
         InfoL << kServerName;
 
