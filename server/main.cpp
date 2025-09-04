@@ -195,9 +195,9 @@ public:
                              nullptr);
         (*_parser) << Option('p', // 是否启动配置文件敏感信息
                              "config_secure",/*该选项全称,每个选项必须有全称；不得为null或空字符串*/
-                             Option::ArgRequired,/*该选项后面必须跟值*/
+                             Option::ArgOptional,/*该选项后面必须跟值*/
                              nullptr,
-                             true,/*该选项是否必须赋值，如果没有默认值且为ArgRequired时用户必须提供该参数否则将抛异常*/
+                             false,/*该选项是否必须赋值，如果没有默认值且为ArgRequired时用户必须提供该参数否则将抛异常*/
                              "是否启动配置文件敏感信息解析",/*该选项说明文字*/
                              nullptr);
 
