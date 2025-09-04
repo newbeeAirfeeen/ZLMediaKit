@@ -522,3 +522,7 @@ if(NOT IS_ABSOLUTE "${result}")
           DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
   )
 endif ()
+install(
+        FILES ${CMAKE_SOURCE_DIR}/conf/config.ini
+        DESTINATION bin
+)

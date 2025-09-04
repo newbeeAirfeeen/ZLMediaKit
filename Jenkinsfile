@@ -17,14 +17,17 @@ pipeline {
             steps{
                 script {
                     def archive_name = "ZLMediakit-fmp4-${env.NODE_NAME}.${env.BUILD_ID}.${env.GIT_COMMIT}.tar.gz"
-                    sh "cmake -B build -DCMAKE_BUILD_TYPE=Release"
+                    sh "cmake -B build -DCMAKE_BUILD_TYPE=Release \
+                                       -DCMAKE_INSTALL_PREFIX=${WORKSPACE}/out"
+                        "
                     sh '''
                            cmake --build build -- -j $(nproc)
+                           cmake --install build
                        '''
                     sh "mkdir -p temp"
 
-                    sh "cp ${WORKSPACE}/release/linux/Release/MediaServer temp/MediaServer"
-                    sh "cp ${WORKSPACE}/release/linux/Release/config.ini temp/config.ini"
+                    sh "cp ${WORKSPACE}/out/bin/MediaServer temp/MediaServer"
+                    sh "cp ${WORKSPACE}/out/bin/config.ini temp/config.ini"
                     sh "mkdir -p target"
                     sh "tar -zcvf ${archive_name} -C temp ."
                     sh "mv ${archive_name} target/"
