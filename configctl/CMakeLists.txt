@@ -18,7 +18,7 @@ target_include_directories(
 
 target_link_libraries(
         configctl PUBLIC zltoolkit
-        PUBLIC ${OPENSSL_LIBRARIES}
+        PUBLIC ${OPENSSL_LIBRARIES} PUBLIC pthread
 )
 
 if(ENABLE_OPENSSL)
