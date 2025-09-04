@@ -366,7 +366,7 @@ if(JEMALLOC_FOUND)
 endif()
 
 # 查找 openssl 是否安装
-find_package(OpenSSL QUIET)
+find_package(OpenSSL REQUIRED)
 if(OPENSSL_FOUND AND ENABLE_OPENSSL)
   message(STATUS "found library: ${OPENSSL_LIBRARIES}, ENABLE_OPENSSL defined")
   include_directories(${OPENSSL_INCLUDE_DIR})
@@ -497,3 +497,28 @@ endif ()
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/www" DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/conf/config.ini" DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/default.pem" DESTINATION ${EXECUTABLE_OUTPUT_PATH})
+set(OPENSSL_SSL_LIB ${OPENSSL_SSL_LIBRARY})
+set(OPENSSL_CRYPTO_LIB ${OPENSSL_CRYPTO_LIBRARIES})
+
+file(READ_SYMLINK "${OPENSSL_CRYPTO_LIBRARY}" result)
+if(NOT IS_ABSOLUTE "${result}")
+  message(STATUS "OpenSSL Crypto library is a symlink: ${OPENSSL_CRYPTO_LIBRARY} -> ${result}")
+  get_filename_component(dir "${OPENSSL_CRYPTO_LIBRARY}" DIRECTORY)
+  set(result "${dir}/${result}")
+  message(STATUS "Installing OpenSSL Crypto library: ${result}")
+  install(
+          FILES "${result}"
+          DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
+  )
+endif()
+file(READ_SYMLINK "${OPENSSL_SSL_LIBRARY}" result)
+if(NOT IS_ABSOLUTE "${result}")
+  message(STATUS "OpenSSL SSL library is a symlink: ${OPENSSL_SSL_LIBRARY} -> ${result}")
+  get_filename_component(dir "${OPENSSL_SSL_LIBRARY}" DIRECTORY)
+  set(result "${dir}/${result}")
+  message(STATUS "Installing OpenSSL SSL library: ${result}")
+  install(
+          FILES "${result}"
+          DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
+  )
+endif ()
