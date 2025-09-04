@@ -26,6 +26,7 @@ pipeline {
                     sh "cmake --install build"
                     sh "mkdir -p temp/lib"
                     sh "cp ${WORKSPACE}/out/bin/MediaServer temp/MediaServer"
+                    sh "cp ${WORKSPACE}/out/bin/configctl temp/configctl"
                     sh "cp ${WORKSPACE}/out/bin/config.ini temp/config.ini"
                     sh "cp ${WORKSPACE}/out/lib/*.so* temp/lib"
                     sh "mkdir -p target"
