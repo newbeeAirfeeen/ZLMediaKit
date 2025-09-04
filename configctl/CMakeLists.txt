@@ -12,7 +12,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-        configctl PUBLIC ZLToolKit_static
+        configctl PUBLIC zltoolkit
 )
 
 if(ENABLE_OPENSSL)
