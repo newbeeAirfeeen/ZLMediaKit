@@ -8,10 +8,11 @@ add_executable(
 
 target_include_directories(
         configctl PRIVATE ${CMAKE_SOURCE_DIR}/Src
+        PRIVATE ${CMAKE_SOURCE_DIR}/3rdpart/ZLToolKit/src
 )
 
 target_link_libraries(
-        configctl PRIVATE media_kit
+        configctl PUBLIC ZLToolKit_static
 )
 
 if(ENABLE_OPENSSL)
