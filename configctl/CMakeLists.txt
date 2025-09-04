@@ -1,5 +1,10 @@
 
-
+find_package(OpenSSL REQUIRED)
+if(OPENSSL_FOUND AND ENABLE_OPENSSL)
+    message(STATUS "找到openssl库:\"${OPENSSL_INCLUDE_DIR}\",ENABLE_OPENSSL宏已打开")
+    include_directories(${OPENSSL_INCLUDE_DIR})
+    add_definitions(-DENABLE_OPENSSL)
+endif()
 add_executable(
         configctl
         main.cpp
@@ -13,6 +18,7 @@ target_include_directories(
 
 target_link_libraries(
         configctl PUBLIC zltoolkit
+        PUBLIC ${OPENSSL_LIBRARIES}
 )
 
 if(ENABLE_OPENSSL)
