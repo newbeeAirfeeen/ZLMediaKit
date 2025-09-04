@@ -53,13 +53,13 @@ option(ENABLE_TESTS "Enable Tests" ON)
 option(ENABLE_WEBRTC "Enable WebRTC" ON)
 option(ENABLE_X264 "Enable x264" OFF)
 option(ENABLE_WEPOLL "Enable wepoll" ON)
-
+option(ENABLE_CONFCTL "Enable configure control" ON)
 option(USE_SOLUTION_FOLDERS "Enable solution dir supported" ON)
 
 ##############################################################################
 
 
-if(CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
   message(STATUS "CMAKE_C_COMPILER_ID: ${CMAKE_C_COMPILER_ID}")
   add_compile_options(-ftrapv -D_FORTIFY_SOURCE=2 -O2 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -std=c++11)
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)  # 启用 PIE
@@ -68,10 +68,10 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
 
   # 全局设置对于所有共享库
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,now")
-  #set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,relro,-z,now")
-  #set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,noexecstack")
-  #set(CMAKE_STRIP_OPTION "-s")
-  #set_target_properties(${PROJECT_NAME} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,relro,-z,now")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,noexecstack")
+  set(CMAKE_STRIP_OPTION "-s")
+  set_target_properties(${PROJECT_NAME} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
 
 else()
   message(WARNING "Not using GCC or Clang compiler. Security options are not enabled.")
@@ -461,6 +461,11 @@ endif()
 if(ENABLE_API)
   add_subdirectory(api)
 endif()
+
+if(ENABLE_CONFCTL)
+  add_subdirectory(configctl)
+endif()
+
 
 add_subdirectory(src)
 

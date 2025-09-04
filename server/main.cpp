@@ -26,7 +26,7 @@
 #include "Rtp/RtpServer.h"
 #include "WebApi.h"
 #include "WebHook.h"
-
+#include "Utils/config_secure.h"
 #if defined(ENABLE_WEBRTC)
 #include "../webrtc/WebRtcTransport.h"
 #include "../webrtc/WebRtcSession.h"
@@ -193,6 +193,13 @@ public:
                              false,/*该选项是否必须赋值，如果没有默认值且为ArgRequired时用户必须提供该参数否则将抛异常*/
                              "启动事件触发线程数",/*该选项说明文字*/
                              nullptr);
+        (*_parser) << Option('p', // 是否启动配置文件敏感信息
+                             "config_secure",/*该选项全称,每个选项必须有全称；不得为null或空字符串*/
+                             Option::ArgRequired,/*该选项后面必须跟值*/
+                             nullptr,
+                             true,/*该选项是否必须赋值，如果没有默认值且为ArgRequired时用户必须提供该参数否则将抛异常*/
+                             "是否启动配置文件敏感信息解析",/*该选项说明文字*/
+                             nullptr);
 
 #if defined(ENABLE_VERSION)
         (*_parser) << Option('v', "version", Option::ArgNone, nullptr, false, "显示版本号",
@@ -268,7 +275,16 @@ int start_main(int argc,char *argv[]) {
 
         //加载配置文件，如果配置文件不存在就创建一个
         loadIniConfig(g_ini_file.data());
-
+        auto mini = mINI::Instance();
+        if(cmd_main.hasKey("config_secure")) {
+            //如果配置文件中有敏感信息，则进行解密
+            if(cmd_main["config_secure"].as<bool>()){
+                if (!load_conf(mini)) {
+                    ErrorL << "配置文件解密失败，请检查配置文件是否正确!";
+                    return -1;
+                }
+            }
+        }
         if (!File::is_dir(ssl_file.data())) {
             //不是文件夹，加载证书，证书包含公钥和私钥
             SSL_Initor::Instance().loadCertificate(ssl_file.data());
