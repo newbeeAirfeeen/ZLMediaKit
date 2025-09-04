@@ -75,9 +75,9 @@ public:
     explicit AsyncLogWriterFilter(const std::shared_ptr<LogWriter>& writer):writer(writer){}
 public:
     void write(const LogContextPtr &ctx, Logger &logger) override {
-        auto content = ctx->str();
+        std::string& content = const_cast<std::string&>(ctx->str());
         auto filter_content = logger_key_filter(content);
-        ctx->_content = filter_content;
+        content.assign(filter_content);
         writer->write(ctx, logger);
     }
 private:
