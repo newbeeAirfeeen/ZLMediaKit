@@ -71,7 +71,7 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,relro,-z,now")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,noexecstack")
   set(CMAKE_STRIP_OPTION "-s")
-  set_target_properties(${PROJECT_NAME} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
+  #set_target_properties(${PROJECT_NAME} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
 
 else()
   message(WARNING "Not using GCC or Clang compiler. Security options are not enabled.")
