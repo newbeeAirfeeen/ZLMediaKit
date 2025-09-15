@@ -24,9 +24,11 @@ namespace mediakit {
 class RtpMultiCaster;
 class RtspSession;
 class RtcpContext;
+class RtspSessionAdapter;
 using BufferRtp = toolkit::BufferOffset<toolkit::Buffer::Ptr>;
 
 class RtspSession : public toolkit::Session, public RtspSplitter, public RtpReceiver, public MediaSourceEvent {
+    friend class RtspSessionAdapter;
 public:
     using Ptr = std::shared_ptr<RtspSession>;
     using onGetRealm = std::function<void(const std::string &realm)>;

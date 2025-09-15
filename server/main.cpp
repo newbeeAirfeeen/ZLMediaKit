@@ -26,7 +26,7 @@
 #include "Rtp/RtpServer.h"
 #include "WebApi.h"
 #include "WebHook.h"
-
+#include "Rtsp/RtspSessionAdapter.h"
 #if defined(ENABLE_WEBRTC)
 #include "../webrtc/WebRtcTransport.h"
 #include "../webrtc/WebRtcSession.h"
@@ -358,7 +358,7 @@ int start_main(int argc,char *argv[]) {
 
         try {
             //rtsp服务器，端口默认554
-            if (rtspPort) { rtspSrv->start<RtspSession>(rtspPort); }
+            if (rtspPort) { rtspSrv->start<RtspSessionAdapter>(rtspPort); }
             //rtsps服务器，端口默认322
             if (rtspsPort) { rtspSSLSrv->start<RtspSessionWithSSL>(rtspsPort); }
 
