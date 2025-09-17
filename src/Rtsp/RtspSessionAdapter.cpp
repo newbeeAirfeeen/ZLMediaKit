@@ -5,6 +5,7 @@
 #include "Util/onceToken.h"
 #include "Rtcp/RtcpContext.h"
 #include <vector>
+#include <algorithm>
 using namespace mediakit;
 using namespace std;
 using namespace toolkit;
