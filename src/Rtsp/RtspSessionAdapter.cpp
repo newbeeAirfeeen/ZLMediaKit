@@ -66,7 +66,7 @@ void RtspSessionAdapter::onWholeRtspPacket_l(Parser &parser) {
     static onceToken token([]() {
         s_cmd_functions.emplace("DESCRIBE", &RtspSessionAdapter::handleReq_Describe_l);
         s_cmd_functions.emplace("SETUP", &RtspSessionAdapter::handleReq_Setup_l);
-        s_cmd_functions.emplace("PLAY", &RtspSessionAdapter::handleReq_Play);
+        s_cmd_functions.emplace("PLAY", &RtspSessionAdapter::handleReq_Play_l);
     });
 
     auto it = s_cmd_functions.find(method);
