@@ -146,7 +146,7 @@ void RtspSessionAdapter::handleReq_Describe_l(const Parser &parser) {
             //获取所有权
             _push_src_ownership = _push_src->getOwnership();
             _push_src->setProtocolOption(option);
-            _push_src->setSdp(parser.Content());
+            _push_src->setSdp(make_sdp());
         }
         _push_src->setListener(dynamic_pointer_cast<MediaSourceEvent>(shared_from_this()));
         _continue_push_ms = option.continue_push_ms;
