@@ -2,6 +2,9 @@
 // Created by shenhao on 2025/8/6.
 //
 #include "magic.h"
+#include "json/json.h"
+#include "Util/util.h"
+#include "Util/logger.h"
 #if defined(ENABLE_OPENSSL)
 #include <openssl/evp.h>
 #include <openssl/bio.h>
@@ -61,16 +64,36 @@ static std::string get_magic_key(const std::string& url) {
     return url.substr(pos, end - pos);
 }
 #endif
-auto contains_magic_key(const std::string& url, const std::string& target, const std::string& key) -> bool {
+auto check_magic_key(const std::string& url, const std::string& key) -> bool {
 #if defined(ENABLE_OPENSSL)
     std::string magic_key = get_magic_key(url);
     if(magic_key.empty()) {
-        return false;
+        return true;
     }
     auto decoded_key = aes_decrypt(magic_key, key);
-    auto it = decoded_key.find(target);
-    return it != std::string::npos;
+    const char* PATTERN = "[Closeli]|";
+    auto it = decoded_key.find(PATTERN);
+    if (it == std::string::npos) {
+        return false;
+    }
+    auto content = decoded_key.substr(it + strlen(PATTERN));
+    std::istringstream iss(content);
+    // 解析 JSON
+    Json::CharReaderBuilder builder;
+    Json::Value root;
+    // 从content解析json
+    std::string errs;
+    if (!Json::parseFromStream(builder, iss, &root, &errs)) {
+        return false;
+    }
+    auto now = toolkit::getCurrentMillisecond();
+    auto expire_at = root.isMember("publish_expired_at") && root["publish_expired_at"].isUInt64() ? root["publish_expired_at"].asUInt64() : 0;
+    if (expire_at < now) {
+        WarnL << "magic key expired, expire_at: " << expire_at << ", now: " << now;
+        return false;
+    }
+    return true;
 #else
-    return false;
+    return true;
 #endif
 }

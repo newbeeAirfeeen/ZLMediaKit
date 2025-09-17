@@ -6,7 +6,7 @@
 #define MAGIC_H
 
 #include <string>
-auto contains_magic_key(const std::string& url, const std::string& target, const std::string& key) -> bool;
+auto check_magic_key(const std::string& url, const std::string& key) -> bool;
 
 
 #endif //MAGIC_H
