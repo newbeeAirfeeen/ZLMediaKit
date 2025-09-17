@@ -53,13 +53,13 @@ option(ENABLE_TESTS "Enable Tests" ON)
 option(ENABLE_WEBRTC "Enable WebRTC" ON)
 option(ENABLE_X264 "Enable x264" OFF)
 option(ENABLE_WEPOLL "Enable wepoll" ON)
-
+option(ENABLE_CONFCTL "Enable configure control" ON)
 option(USE_SOLUTION_FOLDERS "Enable solution dir supported" ON)
 
 ##############################################################################
 
 
-if(CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
   message(STATUS "CMAKE_C_COMPILER_ID: ${CMAKE_C_COMPILER_ID}")
   add_compile_options(-ftrapv -D_FORTIFY_SOURCE=2 -O2 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -std=c++11)
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)  # 启用 PIE
@@ -68,9 +68,9 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
 
   # 全局设置对于所有共享库
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,now")
-  #set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,relro,-z,now")
-  #set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,noexecstack")
-  #set(CMAKE_STRIP_OPTION "-s")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,relro,-z,now")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,noexecstack")
+  set(CMAKE_STRIP_OPTION "-s")
   #set_target_properties(${PROJECT_NAME} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
 
 else()
@@ -366,7 +366,7 @@ if(JEMALLOC_FOUND)
 endif()
 
 # 查找 openssl 是否安装
-find_package(OpenSSL QUIET)
+find_package(OpenSSL REQUIRED)
 if(OPENSSL_FOUND AND ENABLE_OPENSSL)
   message(STATUS "found library: ${OPENSSL_LIBRARIES}, ENABLE_OPENSSL defined")
   include_directories(${OPENSSL_INCLUDE_DIR})
@@ -462,6 +462,11 @@ if(ENABLE_API)
   add_subdirectory(api)
 endif()
 
+if(ENABLE_CONFCTL)
+  add_subdirectory(configctl)
+endif()
+
+
 add_subdirectory(src)
 
 # IOS 不编译可执行程序
@@ -492,3 +497,32 @@ endif ()
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/www" DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/conf/config.ini" DESTINATION ${EXECUTABLE_OUTPUT_PATH})
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/default.pem" DESTINATION ${EXECUTABLE_OUTPUT_PATH})
+set(OPENSSL_SSL_LIB ${OPENSSL_SSL_LIBRARY})
+set(OPENSSL_CRYPTO_LIB ${OPENSSL_CRYPTO_LIBRARIES})
+
+file(READ_SYMLINK "${OPENSSL_CRYPTO_LIBRARY}" result)
+if(NOT IS_ABSOLUTE "${result}")
+  message(STATUS "OpenSSL Crypto library is a symlink: ${OPENSSL_CRYPTO_LIBRARY} -> ${result}")
+  get_filename_component(dir "${OPENSSL_CRYPTO_LIBRARY}" DIRECTORY)
+  set(result "${dir}/${result}")
+  message(STATUS "Installing OpenSSL Crypto library: ${result}")
+  install(
+          FILES "${result}"
+          DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
+  )
+endif()
+file(READ_SYMLINK "${OPENSSL_SSL_LIBRARY}" result)
+if(NOT IS_ABSOLUTE "${result}")
+  message(STATUS "OpenSSL SSL library is a symlink: ${OPENSSL_SSL_LIBRARY} -> ${result}")
+  get_filename_component(dir "${OPENSSL_SSL_LIBRARY}" DIRECTORY)
+  set(result "${dir}/${result}")
+  message(STATUS "Installing OpenSSL SSL library: ${result}")
+  install(
+          FILES "${result}"
+          DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
+  )
+endif ()
+install(
+        FILES ${CMAKE_SOURCE_DIR}/conf/config.ini
+        DESTINATION bin
+)
