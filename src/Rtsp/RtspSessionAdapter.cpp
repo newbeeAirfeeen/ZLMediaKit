@@ -3,6 +3,7 @@
 //
 #include "RtspSessionAdapter.h"
 #include "Util/onceToken.h"
+#include "Rtcp/RtcpContext.h"
 #include <vector>
 using namespace mediakit;
 using namespace std;
@@ -51,7 +52,9 @@ void RtspSessionAdapter::onWholeRtspPacket_l(Parser &parser) {
         base_type::_media_info._schema = RTSP_SCHEMA;
     }
     static std::vector<std::string> METHOD_NOT_ALLOWED = {"ANNOUNCE", "RECORD"};
-    auto not_allowed_it = std::find(METHOD_NOT_ALLOWED.begin(), METHOD_NOT_ALLOWED.end(), method);
+    auto not_allowed_it = std::find_if(METHOD_NOT_ALLOWED.begin(), METHOD_NOT_ALLOWED.end(), [&](const std::string& target) {
+        return target == method;
+    });
     if (not_allowed_it != METHOD_NOT_ALLOWED.end()) {
         sendRtspResponse("405 Forbidden", {"Connection","Close"}, "Adapter Rtsp Method Not Allowed");
         return;
