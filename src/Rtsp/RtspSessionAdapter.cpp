@@ -126,7 +126,8 @@ void RtspSessionAdapter::handleReq_Describe_l(const Parser &parser) {
             throw SockException(Err_shutdown, err);
         }
         // 这里需要自己创建SDP_TRACK
-        _sessionid = makeRandStr(12);
+        base_type::_sessionid = makeRandStr(12);
+        this->_session_id_saved = base_type::_sessionid;
         base_type::_sdp_track = make_sdp_track();
         if (_sdp_track.empty()) {
             // sdp无效
@@ -191,6 +192,12 @@ void RtspSessionAdapter::handleReq_Setup_l(const Parser &parser) {
 void RtspSessionAdapter::handleReq_Play_l(const Parser &parser) {
     auto& method = const_cast<string&>(parser.Method());
     method = "RECORD";
+    auto& session_id = const_cast<string&>(parser["Session"]);
+    trim(session_id);
+    if (session_id.empty()) {
+        WarnL << "Session is empty, revise it with: " << this->_session_id_saved;
+        const_cast<string&>(parser["Session"]) = this->_session_id_saved;
+    }
     base_type::handleReq_RECORD(parser);
 }
 

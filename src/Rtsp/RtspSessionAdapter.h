@@ -30,6 +30,7 @@ namespace mediakit {
 
     private:
         bool _is_adapter_mode = false;
+        std::string _session_id_saved;
     };
 };
 
