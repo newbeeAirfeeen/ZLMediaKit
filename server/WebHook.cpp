@@ -343,6 +343,8 @@ void installWebHook(){
             InfoL << "BroadcastMediaPublishArgs: " << args._full_url << " has magic_key, allow publish";
             invoker("", ProtocolOption());
             return;
+        }else {
+            InfoL << "BroadcastMediaPublishArgs: " << args._full_url << " not has magic_key";
         }
 
 

@@ -85,10 +85,12 @@ auto check_magic_key(const std::string& url, const std::string& key) -> bool {
     Json::Value root;
     // 从content解析json
     std::string errs;
+    TraceL << "json parse: " << content;
     if (!Json::parseFromStream(builder, iss, &root, &errs)) {
         WarnL << "json parse error: " << errs;
         return false;
     }
+    TraceL << "json parse success";
     auto now = toolkit::getCurrentMillisecond();
     auto expire_at = root.isMember("publish_expired_at") && root["publish_expired_at"].isUInt64() ? root["publish_expired_at"].asUInt64() : 0;
     if (expire_at < now) {
