@@ -63,8 +63,7 @@ auto logger_key_filter(string& key) -> std::string {
     static std::vector<std::string> KEYWORDS = {"sig","sign","signature","token","auth","session","secret","password","rsa","aes","mobile","mail","pass_word","sigArray","jwt","pwd","privatekey","key","passId", "pass_id","uid","userId","gwIp","gw_ip","username","phone","address","app_key","appkey", "info","unifiedId","mail","@",".com","test","12345","oken","key","auth","signature","RedisPassword","ApiSecret","AccessSecret" ,"Token","CloudToken","token","sessionid","mail","@",".com","test", "12345", "oken","key","auth","signature","RedisPassword","ApiSecret","AccessSecret","Token","CloudToken", "token","sessionid","Key" };
     for (const std::string& keyword : KEYWORDS) {
         size_t pos = 0;
-        while ((pos = case_insensitive_find(key.substr(pos), keyword)) != std::string::npos) {
-            pos += pos; // 调整到原字符串中的位置
+        while (pos < key.size() && (pos = case_insensitive_find(key.substr(pos), keyword)) != std::string::npos) {
             key.replace(pos, keyword.size(), keyword.size(), '*');
             pos += keyword.size(); // 移动到替换后的位置继续搜索
         }
