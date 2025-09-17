@@ -282,8 +282,8 @@ int start_main(int argc,char *argv[]) {
 #endif//!defined(_WIN32)
 
         //启动异步日志线程
-        Logger::Instance().setWriter(std::make_shared<AsyncLogWriterFilter>(std::make_shared<AsyncLogWriter>()));
-
+        //Logger::Instance().setWriter(std::make_shared<AsyncLogWriterFilter>(std::make_shared<AsyncLogWriter>()));
+        Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
         InfoL << kServerName;
 
         //加载配置文件，如果配置文件不存在就创建一个
