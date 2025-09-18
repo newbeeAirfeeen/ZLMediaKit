@@ -21,7 +21,7 @@ namespace mediakit {
 
     protected:
         void onWholeRtspPacket(Parser &parser) override;
-
+        void onError(const toolkit::SockException &err) override;
     private:
         void onWholeRtspPacket_l(Parser &parser);
         void handleReq_Describe_l(const Parser &parser);
