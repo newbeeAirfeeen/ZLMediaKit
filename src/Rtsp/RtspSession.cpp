@@ -88,6 +88,7 @@ void RtspSession::onError(const SockException &err) {
 
     //如果是主动关闭的，那么不延迟注销
     if (_push_src && _continue_push_ms  && err.getErrCode() != Err_shutdown) {
+        TraceL << "播放器异常断开，延时" << _continue_push_ms << "毫秒注销流:" << _media_info.shortUrl() << ", 所有权:" << (_push_src_ownership ? _push_src_ownership.use_count() : 0);
         //取消所有权
         _push_src_ownership = nullptr;
         //延时10秒注销流

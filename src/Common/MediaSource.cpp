@@ -157,6 +157,7 @@ const string &MediaSource::getId() const {
 
 std::shared_ptr<void> MediaSource::getOwnership() {
     if (_owned.test_and_set()) {
+        TraceL << "getOwnership failed, " << getUrl() << " owned by other";
         // 已经被所有
         return nullptr;
     }
@@ -165,6 +166,7 @@ std::shared_ptr<void> MediaSource::getOwnership() {
     return std::shared_ptr<void>((void *)0x01, [weak_self](void *ptr) {
         auto strong_self = weak_self.lock();
         if (strong_self) {
+            TraceL << "release ownership, " << strong_self->getUrl();
             strong_self->_owned.clear();
         }
     });

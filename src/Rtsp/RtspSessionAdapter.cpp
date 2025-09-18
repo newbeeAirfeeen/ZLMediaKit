@@ -94,7 +94,7 @@ void RtspSessionAdapter::handleReq_Describe_l(const Parser &parser) {
         throw SockException(Err_shutdown, StrPrinter << err << ":" << full_url);
     }
 
-    auto onRes = [this, parser, full_url](const string &err, const ProtocolOption &option) {
+    auto onRes = [this, full_url](const string &err, const ProtocolOption &option) {
         if (!err.empty()) {
             sendRtspResponse("401 Unauthorized", { "Content-Type", "text/plain" }, err);
             shutdown(SockException(Err_shutdown, StrPrinter << "401 Unauthorized:" << err));
@@ -108,11 +108,13 @@ void RtspSessionAdapter::handleReq_Describe_l(const Parser &parser) {
             auto rtsp_src = dynamic_pointer_cast<RtspMediaSourceImp>(src);
             if (!rtsp_src) {
                 //源不是rtsp推流产生的
+                DebugL << "ANNOUNCE: push src is not rtsp:" << _media_info.shortUrl() << endl;
                 break;
             }
             auto ownership = rtsp_src->getOwnership();
             if (!ownership) {
                 //获取推流源所有权失败
+                DebugL << "ANNOUNCE: get push src ownership failed:" << _media_info.shortUrl() << endl;
                 break;
             }
             _push_src = std::move(rtsp_src);
@@ -141,15 +143,15 @@ void RtspSessionAdapter::handleReq_Describe_l(const Parser &parser) {
         for (auto &track : base_type::_sdp_track) {
             base_type::_rtcp_context.emplace_back(std::make_shared<RtcpContextForRecv>());
         }
-        if (!_push_src) {
-            _push_src = std::make_shared<RtspMediaSourceImp>(_media_info._vhost, _media_info._app, _media_info._streamid);
+        if (!base_type::_push_src) {
+            base_type::_push_src = std::make_shared<RtspMediaSourceImp>(_media_info._vhost, _media_info._app, _media_info._streamid);
             //获取所有权
-            _push_src_ownership = _push_src->getOwnership();
-            _push_src->setProtocolOption(option);
-            _push_src->setSdp(make_sdp());
+            base_type::_push_src_ownership = _push_src->getOwnership();
+            base_type::_push_src->setProtocolOption(option);
+            base_type::_push_src->setSdp(make_sdp());
         }
-        _push_src->setListener(dynamic_pointer_cast<MediaSourceEvent>(shared_from_this()));
-        _continue_push_ms = option.continue_push_ms;
+        base_type::_push_src->setListener(dynamic_pointer_cast<MediaSourceEvent>(shared_from_this()));
+        base_type::_continue_push_ms = option.continue_push_ms;
         // 发送额外的sdp适配
         sendRtspResponse("200 OK", {"Cache-Control", "must-revalidate"},make_sdp());
     };
