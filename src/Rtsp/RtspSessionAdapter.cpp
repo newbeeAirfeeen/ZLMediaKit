@@ -104,11 +104,14 @@ void RtspSessionAdapter::handleReq_Describe_l(const Parser &parser) {
         auto src = MediaSource::find(RTSP_SCHEMA, _media_info._vhost, _media_info._app, _media_info._streamid);
         auto push_failed = (bool)src;
         while (src) {
+            DebugL << "Found MediaSource type: " << typeid(*src).name() << endl;
             //尝试断连后继续推流
             auto rtsp_src = dynamic_pointer_cast<RtspMediaSourceImp>(src);
             if (!rtsp_src) {
                 //源不是rtsp推流产生的
-                DebugL << "ANNOUNCE: push src is not rtsp:" << _media_info.getUrl() << endl;
+                DebugL << "dynamic_pointer_cast failed, actual type: "
+                       << typeid(*src).name()
+                       << ", expected: RtspMediaSourceImp" << endl;
                 break;
             }
             auto ownership = rtsp_src->getOwnership();
