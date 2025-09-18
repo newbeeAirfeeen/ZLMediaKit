@@ -108,7 +108,7 @@ void RtspSessionAdapter::handleReq_Describe_l(const Parser &parser) {
             auto rtsp_src = dynamic_pointer_cast<RtspMediaSourceImp>(src);
             if (!rtsp_src) {
                 //源不是rtsp推流产生的
-                DebugL << "ANNOUNCE: push src is not rtsp:" << _media_info.shortUrl() << endl;
+                DebugL << "ANNOUNCE: push src is not rtsp:" << _media_info.getUrl() << endl;
                 break;
             }
             auto ownership = rtsp_src->getOwnership();
