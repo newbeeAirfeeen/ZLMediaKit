@@ -534,7 +534,7 @@ void MediaSource::emitEvent(bool regist) {
     }
     // 触发广播
     NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastMediaChanged, regist, *this);
-    InfoL << (regist ? "媒体注册:" : "媒体注销:") << getUrl();
+    InfoL << typeid(*this).name() << ", " << this << ", " << (regist ? "媒体注册:" : "媒体注销:") << getUrl();
 }
 
 void MediaSource::regist() {
