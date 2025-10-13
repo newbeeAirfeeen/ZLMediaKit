@@ -43,6 +43,10 @@ endif()
 add_executable(MediaServer ${MediaServer_SRC_LIST}
         magic.h
         magic.cpp)
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(MediaServer PRIVATE -fPIC -fPIE)
+  target_link_options(MediaServer PRIVATE -pie)
+endif ()
 target_compile_definitions(MediaServer
   PRIVATE ${COMPILE_DEFINITIONS})
 target_compile_options(MediaServer
