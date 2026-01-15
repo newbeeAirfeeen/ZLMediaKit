@@ -51,7 +51,7 @@ void HlsMaker::makeIndexFile(bool eof) {
         snprintf(
             file_content, sizeof(file_content),
             "#EXTM3U\n"
-            "#EXT-X-VERSION:7\n"
+            "#EXT-X-VERSION:3\n"
             "#EXT-X-INDEPENDENT-SEGMENTS\n"
             "#EXT-X-ALLOW-CACHE:YES\n"
 //            "#EXT-X-VERSION:3\n"
