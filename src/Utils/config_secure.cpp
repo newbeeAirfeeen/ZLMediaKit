@@ -9,13 +9,13 @@
 #include <vector>
 #include <string>
 #include <Util/base64.h>
-static auto aes_256_cbc_encrypt(const std::string &key, const std::string &iv, const std::string &data) -> std::string{
+static auto aes_128_cbc_encrypt(const std::string &key, const std::string &iv, const std::string &data) -> std::string{
 
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (!ctx) return {};
 
     // 初始化加密操作
-    if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr,
+    if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), nullptr,
                                 reinterpret_cast<const unsigned char*>(key.c_str()),
                                 reinterpret_cast<const unsigned char*>(iv.c_str()))) {
         EVP_CIPHER_CTX_free(ctx);
@@ -49,12 +49,12 @@ static auto aes_256_cbc_encrypt(const std::string &key, const std::string &iv, c
     return ciphertext;
 
 }
-static auto aes_256_cbc_decrypt(const std::string &key, const std::string &iv, const std::string &data) -> std::string{
+static auto aes_128_cbc_decrypt(const std::string &key, const std::string &iv, const std::string &data) -> std::string{
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (!ctx) return "";
 
     // 初始化解密操作
-    if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL,
+    if (1 != EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), nullptr,
                                 reinterpret_cast<const unsigned char*>(key.c_str()),
                                 reinterpret_cast<const unsigned char*>(iv.c_str()))) {
         EVP_CIPHER_CTX_free(ctx);
@@ -88,8 +88,8 @@ static auto aes_256_cbc_decrypt(const std::string &key, const std::string &iv, c
     return plaintext;
 }
 // 帮我生成一个随机的32个字节的密钥和16个字节的IV
-static const std::string KEY = "5d3b7a9f1c8e4b2a6f0d3c9e5a1b8f4d2c7e0a3b9f6c1d4e8a2f7b0c5d3a9f1e"; // 64 bytes for AES-256
-static const std::string IV = "3a8f2c1d9e4b0a7f2c5e8b1d4a0f3c6e"; // 32 bytes for
+static const std::string KEY = "my_secret_key_12";
+static const std::string IV = "unique_iv_123456";
 const std::vector<std::string> CONTAINS_KEY = {
     "token",
     "key",
@@ -113,7 +113,7 @@ bool store_conf(toolkit::mINI_basic<std::string, toolkit::variant>& ini) {
             continue;
         }
         if(is_contains_key(ik.first)){
-            ik.second = encodeBase64(aes_256_cbc_encrypt(KEY, IV, ik.second));
+            ik.second = encodeBase64(aes_128_cbc_encrypt(KEY, IV, ik.second));
         }
     }
     return true;
@@ -125,7 +125,7 @@ bool load_conf(toolkit::mINI_basic<std::string, toolkit::variant>& ini){
         }
         if(is_contains_key(ik.first)){
             auto decoded = decodeBase64(ik.second);
-            ik.second = aes_256_cbc_decrypt(KEY, IV, decoded);
+            ik.second = aes_128_cbc_decrypt(KEY, IV, decoded);
         }
     }
     return true;

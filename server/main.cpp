@@ -323,7 +323,12 @@ int start_main(int argc,char *argv[]) {
         uint16_t httpPort = mINI::Instance()[Http::kPort];
         uint16_t httpsPort = mINI::Instance()[Http::kSSLPort];
         uint16_t rtpPort = mINI::Instance()[RtpProxy::kPort];
-
+        auto instance = mINI::Instance();
+        if (instance.count("general.host") == 0) {
+            //默认监听所有网卡
+            instance["general.host"] = "::";
+        }
+        std::string host = mINI::Instance()["general.host"];
         //设置poller线程数,该函数必须在使用ZLToolKit网络相关对象之前调用才能生效
         EventPollerPool::setPoolSize(threads);
 
@@ -387,39 +392,39 @@ int start_main(int argc,char *argv[]) {
 
         try {
             //rtsp服务器，端口默认554
-            if (rtspPort) { rtspSrv->start<RtspSessionAdapter>(rtspPort); }
+            if (rtspPort) { rtspSrv->start<RtspSessionAdapter>(rtspPort, host); }
             //rtsps服务器，端口默认322
-            if (rtspsPort) { rtspSSLSrv->start<RtspSessionWithSSL>(rtspsPort); }
+            if (rtspsPort) { rtspSSLSrv->start<RtspSessionWithSSL>(rtspsPort, host); }
 
             //rtmp服务器，端口默认1935
-            if (rtmpPort) { rtmpSrv->start<RtmpSession>(rtmpPort); }
+            if (rtmpPort) { rtmpSrv->start<RtmpSession>(rtmpPort, host); }
             //rtmps服务器，端口默认19350
-            if (rtmpsPort) { rtmpsSrv->start<RtmpSessionWithSSL>(rtmpsPort); }
+            if (rtmpsPort) { rtmpsSrv->start<RtmpSessionWithSSL>(rtmpsPort, host); }
 
             //http服务器，端口默认80
-            if (httpPort) { httpSrv->start<HttpSession>(httpPort); }
+            if (httpPort) { httpSrv->start<HttpSession>(httpPort, host); }
             //https服务器，端口默认443
-            if (httpsPort) { httpsSrv->start<HttpsSession>(httpsPort); }
+            if (httpsPort) { httpsSrv->start<HttpsSession>(httpsPort, host); }
 
             //telnet远程调试服务器
-            if (shellPort) { shellSrv->start<ShellSession>(shellPort); }
+            if (shellPort) { shellSrv->start<ShellSession>(shellPort, host); }
 
 #if defined(ENABLE_RTPPROXY)
             //创建rtp服务器
-            if (rtpPort) { rtpServer->start(rtpPort); }
+            if (rtpPort) { rtpServer->start(rtpPort, host); }
 #endif//defined(ENABLE_RTPPROXY)
 
 #if defined(ENABLE_WEBRTC)
             //webrtc udp服务器
-            if (rtcPort) { rtcSrv_udp->start<WebRtcSession>(rtcPort);}
+            if (rtcPort) { rtcSrv_udp->start<WebRtcSession>(rtcPort, host);}
 
-            if (rtcTcpPort) { rtcSrv_tcp->start<WebRtcSession>(rtcTcpPort);}
+            if (rtcTcpPort) { rtcSrv_tcp->start<WebRtcSession>(rtcTcpPort, host);}
              
 #endif//defined(ENABLE_WEBRTC)
 
 #if defined(ENABLE_SRT)
         // srt udp服务器
-        if(srtPort) { srtSrv->start<SRT::SrtSession>(srtPort); }
+        if(srtPort) { srtSrv->start<SRT::SrtSession>(srtPort, host); }
 #endif//defined(ENABLE_SRT)
 
         } catch (std::exception &ex) {
