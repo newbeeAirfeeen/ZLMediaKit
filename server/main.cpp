@@ -7,7 +7,8 @@
  * LICENSE file in the root of the source tree. All contributing project authors
  * may be found in the AUTHORS file in the root of the source tree.
  */
-
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <signal.h>
 #include <iostream>
 #include "Util/File.h"
@@ -151,7 +152,31 @@ onceToken token1([](){
 
 }  // namespace mediakit
 
-
+class FileChannelImp : public FileChannel {
+public:
+    FileChannelImp(const std::string &name = "FileChannel", const std::string &dir = exeDir() + "log/", LogLevel level = LTrace): FileChannel(name, dir, level) {}
+protected:
+    bool open() override {
+        // Ensure a path was set
+        if (_path.empty()) {
+            throw runtime_error("Log file path must be set");
+        }
+        // Open the file stream
+        _fstream.close();
+#if !defined(_WIN32)
+        //创建文件夹
+        File::create_path(_path, S_IRUSR | S_IWUSR | S_IRGRP);
+#else
+        File::create_path(_path,0);
+#endif
+        _fstream.open(_path.data(), ios::out | ios::app);
+        if (!_fstream.is_open()) {
+            return false;
+        }
+        //打开文件成功
+        return true;
+    }
+};
 class CMD_main : public CMD {
 public:
     CMD_main() {
@@ -264,7 +289,7 @@ int start_main(int argc,char *argv[]) {
         //设置日志
         Logger::Instance().add(std::make_shared<ConsoleChannel>("ConsoleChannel", logLevel));
 #ifndef ANDROID
-        auto fileChannel = std::make_shared<FileChannel>("FileChannel", exeDir() + "log/", logLevel);
+        auto fileChannel = std::make_shared<FileChannelImp>("FileChannel", exeDir() + "log/", logLevel);
         //日志最多保存天数
         fileChannel->setMaxDay(cmd_main["max_day"]);
         Logger::Instance().add(fileChannel);
