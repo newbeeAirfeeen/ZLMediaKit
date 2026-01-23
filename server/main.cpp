@@ -166,7 +166,7 @@ protected:
         _fstream.close();
 #if !defined(_WIN32)
         //创建文件夹
-        File::create_path(_path, S_IRUSR | S_IWUSR | S_IRGRP);
+        File::create_path(_path.c_str(), S_IRUSR | S_IWUSR | S_IRGRP);
 #else
         File::create_path(_path,0);
 #endif
