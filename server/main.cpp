@@ -7,6 +7,7 @@
  * LICENSE file in the root of the source tree. All contributing project authors
  * may be found in the AUTHORS file in the root of the source tree.
  */
+#include "Util/File.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <signal.h>
