@@ -165,8 +165,8 @@ protected:
         // Open the file stream
         _fstream.close();
 #if !defined(_WIN32)
-        //创建文件夹
-        File::create_path(_path.c_str(), S_IRUSR | S_IWUSR | S_IRGRP);
+        //创建文件夹，目录权限为 rwxrwxrwx (0777)
+        File::create_path(_path.c_str(), S_IRWXO | S_IRWXG | S_IRWXU);
 #else
         File::create_path(_path,0);
 #endif
@@ -174,6 +174,10 @@ protected:
         if (!_fstream.is_open()) {
             return false;
         }
+#if !defined(_WIN32)
+        //设置日志文件权限为 640 (rw-r-----)
+        chmod(_path.data(), S_IRUSR | S_IWUSR | S_IRGRP);
+#endif
         //打开文件成功
         return true;
     }
