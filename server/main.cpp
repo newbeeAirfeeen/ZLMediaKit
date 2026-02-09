@@ -30,6 +30,12 @@
 #include "WebHook.h"
 #include "Rtsp/RtspSessionAdapter.h"
 #include "Utils/config_secure.h"
+#if !defined(_WIN32)
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#endif
+
 #if defined(ENABLE_WEBRTC)
 #include "../webrtc/WebRtcTransport.h"
 #include "../webrtc/WebRtcSession.h"
@@ -167,16 +173,20 @@ protected:
 #if !defined(_WIN32)
         //创建文件夹，目录权限为 rwxrwxrwx (0777)
         File::create_path(_path.c_str(), S_IRWXO | S_IRWXG | S_IRWXU);
-#else
-        File::create_path(_path,0);
-#endif
-        _fstream.open(_path.data(), ios::out | ios::app);
-        if (!_fstream.is_open()) {
+
+        // 使用 POSIX open() 创建文件，精确控制权限为 640
+        // std::ofstream 会受 umask 影响，所以用 open() + fdopen() 方式
+        int fd = ::open(_path.c_str(), O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR | S_IRGRP);
+        if (fd == -1) {
             return false;
         }
-#if !defined(_WIN32)
-        //设置日志文件权限为 640 (rw-r-----)
-        chmod(_path.data(), S_IRUSR | S_IWUSR | S_IRGRP);
+        // 关闭文件描述符，让 fstream 重新打开（此时文件已存在，权限已设置）
+        ::close(fd);
+
+        // 再次确保权限正确（处理文件已存在的情况）
+        chmod(_path.c_str(), S_IRUSR | S_IWUSR | S_IRGRP);
+#else
+        File::create_path(_path,0);
 #endif
         //打开文件成功
         return true;
