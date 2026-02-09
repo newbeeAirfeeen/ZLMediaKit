@@ -189,6 +189,10 @@ protected:
         File::create_path(_path,0);
 #endif
         //打开文件成功
+        _fstream.open(_path.data(), ios::out | ios::app);
+        if (!_fstream.is_open()) {
+            return false;
+        }
         return true;
     }
 };
@@ -308,7 +312,7 @@ int start_main(int argc,char *argv[]) {
         //日志最多保存天数
         fileChannel->setMaxDay(cmd_main["max_day"]);
         Logger::Instance().add(fileChannel);
-#endif//
+#endif
 
 #if !defined(_WIN32)
         pid_t pid = getpid();
