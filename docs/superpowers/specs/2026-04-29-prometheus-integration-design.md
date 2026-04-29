@@ -145,7 +145,7 @@ push_instance=
 ### Registry safety
 - `Counter` / `Gauge` store values in `std::atomic<double>`. Increment uses `compare_exchange_weak` loop (project is C++11; `std::atomic<double>::fetch_add` is C++20).
 - `Family`'s label-set → metric instance map is guarded by `std::mutex` (no `shared_mutex` since the project targets C++11). Lookup is short and uncontended in practice — scrapes are infrequent.
-- In v1 there is no business-thread write to gauges; all writes happen inside `collect()`. Atomic + mutex are defensive only.
+- In v1 there is no business-thread write to gauges. The only writers are: (a) `Collector::init()` for one-time values like `zlm_build_info`, and (b) `Collector::collect()` for everything else. Both run on the WorkThread context. Atomic + mutex are defensive only.
 
 ### PushGateway timer
 - One periodic task scheduled on an EventPoller via `EventPoller::doDelayTask` (recursive scheduling), which then dispatches the actual collect+POST work to a `WorkThreadPool` worker. The HTTP POST itself uses ZLToolKit's `HttpRequester` (async, non-blocking).
