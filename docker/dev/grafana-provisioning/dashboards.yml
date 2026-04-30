@@ -1,0 +1,13 @@
+# author: oaho
+# date:   2026/04/29
+# desc:   Provision the local dashboard JSONs from /var/lib/grafana/dashboards.
+
+apiVersion: 1
+providers:
+  - name: zlmediakit
+    type: file
+    folder: ZLMediaKit
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

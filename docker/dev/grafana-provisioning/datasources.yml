@@ -1,0 +1,12 @@
+# author: oaho
+# date:   2026/04/29
+# desc:   Provision Prometheus as the default Grafana datasource.
+
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prom_dev:9090
+    isDefault: true
+    editable: false

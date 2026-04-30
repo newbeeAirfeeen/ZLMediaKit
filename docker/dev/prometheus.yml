@@ -1,0 +1,16 @@
+# author: oaho
+# date:   2026/04/29
+# desc:   Prometheus scrape config for the dev compose stack. The
+#         zlmediakit container exposes /metrics on port 80 (mapped to
+#         8088 on the host); inside the prom_dev network we reach it via
+#         the service name.
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: zlmediakit
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['zlmediakit:80']

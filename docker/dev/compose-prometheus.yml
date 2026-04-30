@@ -1,0 +1,55 @@
+# author: oaho
+# date:   2026/04/29
+# desc:   Local development stack for Prometheus integration.
+#         Brings up ZLMediaKit (built from the repo root), Prometheus, and
+#         Grafana with a pre-baked scrape config and dashboard JSON.
+#         Not packaged into release artifacts.
+#
+# usage:  cd docker/dev && docker compose -f compose-prometheus.yml up --build
+#         Grafana: http://localhost:3000  (anonymous viewer enabled)
+#         Prometheus: http://localhost:9090
+#         ZLMediaKit /metrics: http://localhost:8088/metrics
+
+version: "3.8"
+
+services:
+  zlmediakit:
+    build:
+      context: ../..
+      dockerfile: dockerfile
+    image: zlmediakit:dev
+    container_name: zlm_dev
+    ports:
+      - "8088:80"      # http (含 /metrics)
+      - "1935:1935"    # rtmp
+      - "554:554"      # rtsp
+    networks: [promnet]
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prom_dev
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks: [promnet]
+    depends_on: [zlmediakit]
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: grafana_dev
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+    volumes:
+      - ./grafana-provisioning/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./grafana-provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./grafana-dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    networks: [promnet]
+    depends_on: [prometheus]
+
+networks:
+  promnet:
+    driver: bridge
