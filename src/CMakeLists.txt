@@ -27,6 +27,17 @@ file(GLOB MediaKit_SRC_LIST
   ${CMAKE_CURRENT_SOURCE_DIR}/*/*.h
   ${CMAKE_SOURCE_DIR}/server/AuthCenter.cpp)
 
+# 当 ENABLE_PROMETHEUS=OFF 时, 把 Prometheus 子目录下的源/头文件从编译列表中剔除,
+# 这样 SDK 构建 (Android/API SDK/CXX SDK) 不会拖入 Prometheus 模块
+if(NOT ENABLE_PROMETHEUS)
+  file(GLOB PROMETHEUS_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/Prometheus/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Prometheus/*.h)
+  if(PROMETHEUS_FILES)
+    list(REMOVE_ITEM MediaKit_SRC_LIST ${PROMETHEUS_FILES})
+  endif()
+endif()
+
 if(USE_SOLUTION_FOLDERS AND (NOT GROUP_BY_EXPLORER))
   # 在 IDE 中对文件进行分组, 源文件和头文件分开
   set_file_group("${CMAKE_CURRENT_SOURCE_DIR}" ${MediaKit_SRC_LIST})

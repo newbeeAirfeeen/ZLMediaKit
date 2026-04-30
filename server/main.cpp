@@ -54,6 +54,11 @@
 #include "System.h"
 #endif//!defined(_WIN32)
 
+#if defined(ENABLE_PROMETHEUS)
+#include "Prometheus/Collector.h"
+#include "Prometheus/PrometheusHandler.h"
+#endif
+
 using namespace std;
 using namespace toolkit;
 using namespace mediakit;
@@ -489,6 +494,14 @@ int start_main(int argc,char *argv[]) {
         installWebHook();
         InfoL << "已启动http hook 接口";
 
+#if defined(ENABLE_PROMETHEUS)
+        // 初始化 Prometheus collector + 注册 /metrics 端点 (仅当 prometheus.enable=1)
+        if (mINI::Instance()[Prometheus::kEnable].as<int>()) {
+            Prometheus::Collector::Instance().init();
+            Prometheus::PrometheusHandler::regist();
+        }
+#endif
+
         //设置退出信号处理函数
         static semaphore sem;
         signal(SIGINT, [](int) {
@@ -504,6 +517,11 @@ int start_main(int argc,char *argv[]) {
     }
     unInstallWebApi();
     unInstallWebHook();
+#if defined(ENABLE_PROMETHEUS)
+    if (mINI::Instance()[Prometheus::kEnable].as<int>()) {
+        Prometheus::Collector::Instance().shutdown();
+    }
+#endif
     //休眠1秒再退出，防止资源释放顺序错误
     InfoL << "程序退出中,请等待...";
     sleep(1);

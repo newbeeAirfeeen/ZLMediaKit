@@ -48,6 +48,7 @@ option(ENABLE_PLAYER "Enable Player" ON)
 option(ENABLE_RTPPROXY "Enable RTPPROXY" ON)
 option(ENABLE_SERVER "Enable Server" ON)
 option(ENABLE_SERVER_LIB "Enable server as android static library" OFF)
+option(ENABLE_PROMETHEUS "Enable Prometheus metrics" ${ENABLE_SERVER})
 option(ENABLE_SRT "Enable SRT" ON)
 option(ENABLE_TESTS "Enable Tests" ON)
 option(ENABLE_WEBRTC "Enable WebRTC" ON)
@@ -61,15 +62,19 @@ option(USE_SOLUTION_FOLDERS "Enable solution dir supported" ON)
 
 if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
   message(STATUS "CMAKE_C_COMPILER_ID: ${CMAKE_C_COMPILER_ID}")
-  add_compile_options(-ftrapv -D_FORTIFY_SOURCE=2 -O2 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -std=c++11)
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)  # 启用 PIE
   add_compile_options(-fstack-protector-strong)
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,now")
-
-  # 全局设置对于所有共享库
-  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,now")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,relro,-z,now")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,noexecstack")
+  # -Wl,-z,* 是 GNU ld (Linux) 专属选项, Apple ld 会拒绝它们.
+  # 仅在 Linux 等 ELF 平台启用这些 hardening 链接选项.
+  if(NOT APPLE)
+    add_compile_options(-ftrapv -D_FORTIFY_SOURCE=2 -O2 -Wl,-z,relro,-z,now -Wl,-z,noexecstack -std=c++11)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,now")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,-z,now")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,relro,-z,now")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,noexecstack")
+  else()
+    add_compile_options(-ftrapv -D_FORTIFY_SOURCE=2 -O2 -std=c++11)
+  endif()
   set(CMAKE_STRIP_OPTION "-s")
   #set_target_properties(${PROJECT_NAME} PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
 
@@ -416,6 +421,11 @@ if(WIN32)
   update_cached_list(MK_LINK_LIBRARIES WS2_32 Iphlpapi shlwapi)
 elseif(NOT ANDROID OR IOS)
   update_cached_list(MK_LINK_LIBRARIES pthread)
+endif()
+
+if(ENABLE_PROMETHEUS)
+  message(STATUS "ENABLE_PROMETHEUS defined")
+  update_cached_list(MK_COMPILE_DEFINITIONS ENABLE_PROMETHEUS)
 endif()
 
 # ----------------------------------------------------------------------------
