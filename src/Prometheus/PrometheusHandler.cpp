@@ -32,16 +32,15 @@ static int s_listener_tag = 0;
 }
 
 void PrometheusHandler::regist() {
-    GET_CONFIG(int, enable, kEnable);
-    if (!enable) {
+    if (!mINI::Instance()[kEnable].as<int>()) {
         return;
     }
-    GET_CONFIG(string, path, kPath);
-    GET_CONFIG(int, auth, kAuth);
 
     NoticeCenter::Instance().addListener(
         &s_listener_tag, Broadcast::kBroadcastHttpRequest,
-        [path, auth](BroadcastHttpRequestArgs) {
+        [](BroadcastHttpRequestArgs) {
+            // 路径与鉴权设置都从 mINI 现读, 测试时改动 auth/path 即时生效, 主进程也允许 SIGHUP 重载.
+            const string path = mINI::Instance()[kPath].as<string>();
             if (parser.Url() != path) {
                 return;
             }
@@ -49,9 +48,9 @@ void PrometheusHandler::regist() {
 
             // 鉴权: auth=1 时要求 ?secret=xxx 与 api.secret 一致;
             // 127.0.0.1 始终放行 (与 CHECK_SECRET 行为一致, 便于本机调试)
+            const int auth = mINI::Instance()[kAuth].as<int>();
             if (auth && sender.get_peer_ip() != "127.0.0.1") {
-                static const string kApiSecret = "api.secret";
-                GET_CONFIG(string, api_secret, kApiSecret);
+                const string api_secret = mINI::Instance()["api.secret"].as<string>();
                 string supplied;
                 for (auto &kv : parser.getUrlArgs()) {
                     if (kv.first == "secret") {
@@ -85,7 +84,8 @@ void PrometheusHandler::regist() {
             });
         });
 
-    InfoL << "prometheus enabled, endpoint=" << path << ", auth=" << auth;
+    InfoL << "prometheus enabled, endpoint=" << mINI::Instance()[kPath].as<string>()
+          << ", auth=" << mINI::Instance()[kAuth].as<int>();
 }
 
 }  // namespace Prometheus
