@@ -49,6 +49,11 @@
 #include <tchar.h>
 #endif // _WIN32
 
+#if defined(ENABLE_PROMETHEUS)
+#include "Prometheus/Collector.h"
+#include "Prometheus/Registry.h"
+#endif
+
 #if defined(ENABLE_VERSION)
 #include "version.h"
 #endif
@@ -456,6 +461,30 @@ void getStatisticJson(const function<void(Value &val)> &cb) {
 
     val["RtpPacket"] = (Json::UInt64)(ObjectStatistic<RtpPacket>::count());
     val["RtmpPacket"] = (Json::UInt64)(ObjectStatistic<RtmpPacket>::count());
+
+#if defined(ENABLE_PROMETHEUS)
+    {
+        // Prometheus 模块运行时状态: 给 ops 一个 "/metrics 是否健康 / 上次推 push 怎样了" 的窗口
+        auto &col = Prometheus::Collector::Instance();
+        Value prom(objectValue);
+        prom["enabled"] = col.initialized();
+        prom["registry_metric_count"] = (Json::UInt64) Prometheus::Registry::Instance().metricCount();
+        prom["registry_series_count"] = (Json::UInt64) Prometheus::Registry::Instance().seriesCount();
+        prom["last_scrape_duration_ms"] = col.lastScrapeDurationMs();
+        prom["last_scrape_at_ms"] = (Json::Int64) col.lastScrapeAtMs();
+
+        Value pg(objectValue);
+        pg["enabled"] = !mINI::Instance()[Prometheus::kPushUrl].as<string>().empty();
+        pg["last_push_at_ms"] = (Json::Int64) col.lastPushAtMs();
+        pg["last_push_status"] = col.lastPushStatus();
+        pg["total_push_attempts"] = (Json::UInt64) col.totalPushAttempts();
+        pg["total_push_failures"] = (Json::UInt64) col.totalPushFailures();
+        prom["pushgateway"] = pg;
+
+        val["Prometheus"] = prom;
+    }
+#endif
+
 #ifdef ENABLE_MEM_DEBUG
     auto bytes = getTotalMemUsage();
     val["totalMemUsage"] = (Json::UInt64) bytes;
