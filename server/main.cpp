@@ -57,6 +57,7 @@
 #if defined(ENABLE_PROMETHEUS)
 #include "Prometheus/Collector.h"
 #include "Prometheus/PrometheusHandler.h"
+#include "Prometheus/PushGateway.h"
 #endif
 
 using namespace std;
@@ -495,10 +496,11 @@ int start_main(int argc,char *argv[]) {
         InfoL << "已启动http hook 接口";
 
 #if defined(ENABLE_PROMETHEUS)
-        // 初始化 Prometheus collector + 注册 /metrics 端点 (仅当 prometheus.enable=1)
+        // 初始化 Prometheus collector + 注册 /metrics 端点 + 启动 Pushgateway (按配置可选)
         if (mINI::Instance()[Prometheus::kEnable].as<int>()) {
             Prometheus::Collector::Instance().init();
             Prometheus::PrometheusHandler::regist();
+            Prometheus::PushGateway::Instance().start();
         }
 #endif
 
@@ -519,6 +521,7 @@ int start_main(int argc,char *argv[]) {
     unInstallWebHook();
 #if defined(ENABLE_PROMETHEUS)
     if (mINI::Instance()[Prometheus::kEnable].as<int>()) {
+        Prometheus::PushGateway::Instance().stop();
         Prometheus::Collector::Instance().shutdown();
     }
 #endif
