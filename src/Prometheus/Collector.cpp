@@ -27,7 +27,6 @@
 #include "Util/util.h"
 #include "Thread/TaskExecutor.h"
 #include "Thread/WorkThreadPool.h"
-#include "Thread/semaphore.h"
 #include "Poller/EventPoller.h"
 #include "Network/Session.h"
 #include "Network/Server.h"
@@ -126,7 +125,6 @@ void Collector::init() {
     _fam_threads_total  = &reg.registerGauge("zlm_threads_total", "Total number of OS threads in this process");
     _fam_open_files     = &reg.registerGauge("zlm_open_files_total", "Number of open file descriptors");
     _fam_thread_load    = &reg.registerGauge("zlm_thread_load_percent", "Per-thread load percent (poller and work pools)");
-    _fam_thread_delay   = &reg.registerGauge("zlm_thread_delay_ms", "Per-thread event-loop delay in milliseconds");
     _fam_stream_total   = &reg.registerGauge("zlm_stream_total", "Number of currently registered media streams, by schema");
     _fam_stream_readers = &reg.registerGauge("zlm_stream_total_readers", "Total reader count across streams, by schema");
     _fam_session_total  = &reg.registerGauge("zlm_session_total", "Number of active sessions, by type");
@@ -184,35 +182,10 @@ void Collector::collectThreadMetrics() {
         _fam_thread_load->withLabels(lbl).set(work_load[i]);
     }
 
-    // delay 是异步接口; 为了让 scrape 同步返回, 我们用 promise/future 拿结果.
-    // 在 WorkThread 上 scrape, 结果回调可能跑到任意 EventPoller, 不会导致死锁.
-    std::vector<int> poller_delay;
-    std::vector<int> work_delay;
-    {
-        auto sem = std::make_shared<semaphore>();
-        EventPollerPool::Instance().getExecutorDelay([sem, &poller_delay](const std::vector<int> &v) {
-            poller_delay = v;
-            sem->post();
-        });
-        sem->wait();
-    }
-    {
-        auto sem = std::make_shared<semaphore>();
-        WorkThreadPool::Instance().getExecutorDelay([sem, &work_delay](const std::vector<int> &v) {
-            work_delay = v;
-            sem->post();
-        });
-        sem->wait();
-    }
-
-    for (size_t i = 0; i < poller_delay.size(); ++i) {
-        Labels lbl = {{"type", "poller"}, {"thread_id", std::to_string(i)}};
-        _fam_thread_delay->withLabels(lbl).set(poller_delay[i]);
-    }
-    for (size_t i = 0; i < work_delay.size(); ++i) {
-        Labels lbl = {{"type", "work"}, {"thread_id", std::to_string(i)}};
-        _fam_thread_delay->withLabels(lbl).set(work_delay[i]);
-    }
+    // 注意: 之前曾尝试在这里同步等 getExecutorDelay 回调以填充 zlm_thread_delay_ms,
+    // 但 scrape 跑在 WorkThread 上, getExecutorDelay 又给每个 WorkThread (包括自己)
+    // 派发任务等待全部完成 -> 自身阻塞导致死锁.
+    // 暂从 v1 移除 delay 指标; 后续若需要, 应改为后台 timer 周期性刷新到缓存 gauge.
 }
 
 void Collector::collectBusinessMetrics() {

@@ -79,7 +79,6 @@ private:
     Family *_fam_threads_total = nullptr;
     Family *_fam_open_files = nullptr;
     Family *_fam_thread_load = nullptr;
-    Family *_fam_thread_delay = nullptr;
     Family *_fam_stream_total = nullptr;
     Family *_fam_stream_readers = nullptr;
     Family *_fam_session_total = nullptr;
