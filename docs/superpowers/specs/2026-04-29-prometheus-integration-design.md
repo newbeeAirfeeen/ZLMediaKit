@@ -88,13 +88,13 @@ All metrics are gauges. Naming convention: prefix `zlm_`, suffix with unit (`_by
 | `zlm_cpu_usage_percent` | gauge | — | Linux: `/proc/self/stat`; macOS: `task_info`; Windows: empty | Platform-abstracted |
 | `zlm_memory_rss_bytes` | gauge | — | Linux: `/proc/self/status`; macOS: `mach_task_basic_info`; Windows: empty | |
 | `zlm_memory_virtual_bytes` | gauge | — | Same | |
-| `zlm_threads_total` | gauge | — | Linux: count `/proc/self/task`; macOS: `proc_pidinfo`; Windows: empty | |
-| `zlm_open_files_total` | gauge | — | Linux: count `/proc/self/fd`; macOS: `proc_pidinfo`; Windows: empty | |
+| `zlm_threads` | gauge | — | Linux: count `/proc/self/task`; macOS: `proc_pidinfo`; Windows: empty | Renamed from `zlm_threads_total` (gauges must not use `_total` suffix) |
+| `zlm_open_fds` | gauge | — | Linux: count `/proc/self/fd`; macOS: `proc_pidinfo`; Windows: empty | Renamed from `zlm_open_files_total` |
 | `zlm_thread_load_percent` | gauge | `thread_id`, `type="poller\|work"` | `EventPollerPool::getExecutorLoad()` + `WorkThreadPool::getExecutorLoad()` | Same source as `getThreadsLoad`/`getWorkThreadsLoad` |
 | `zlm_thread_delay_ms` | gauge | `thread_id`, `type="poller\|work"` | `EventPollerPool::getExecutorDelay()` + `WorkThreadPool::getExecutorDelay()` | Same |
-| `zlm_stream_total` | gauge | `schema="rtsp\|rtmp\|hls\|ts\|fmp4"` | `MediaSource::for_each_media`, accumulated by schema | Single traversal fills all series |
-| `zlm_stream_total_readers` | gauge | `schema=...` | Same traversal, sum of `getReaderCount()` | |
-| `zlm_session_total` | gauge | `type="rtsp\|rtmp\|http\|..."` | `SessionMap::Instance().for_each_session`, classified by `getIdentifier` prefix | Single traversal fills all series |
+| `zlm_streams` | gauge | `schema="rtsp\|rtmp\|hls\|ts\|fmp4"` | `MediaSource::for_each_media`, accumulated by schema | Renamed from `zlm_stream_total`; single traversal fills all series |
+| `zlm_stream_readers` | gauge | `schema=...` | Same traversal, sum of `getReaderCount()` | Renamed from `zlm_stream_total_readers` |
+| `zlm_sessions` | gauge | `type="rtsp\|rtmp\|http\|..."` | `SessionMap::Instance().for_each_session`, classified by `getIdentifier` prefix | Renamed from `zlm_session_total`; single traversal fills all series |
 
 **Total series estimate**: ~38 series (7 process-level + ~16 thread × 2 + 5 schema × 2 + ~5 session types). Scrape body: a few KB.
 
@@ -209,8 +209,8 @@ Two integration test executables, following the `tests/test_*.cpp` convention (o
 3. `HttpRequester` GET `http://127.0.0.1:<port>/metrics`.
 4. Assert:
    - Status 200, `Content-Type: text/plain; version=0.0.4; charset=utf-8`.
-   - Body contains `# HELP zlm_stream_total ...` and `# TYPE zlm_stream_total gauge`.
-   - Body contains `zlm_stream_total{schema="rtmp"} 3` and `zlm_stream_total{schema="rtsp"} 2`.
+   - Body contains `# HELP zlm_streams ...` and `# TYPE zlm_streams gauge`.
+   - Body contains `zlm_streams{schema="rtmp"} 3` and `zlm_streams{schema="rtsp"} 2`.
    - Body contains a `zlm_build_info{...} 1` line.
    - Sysinfo metrics (CPU%, RSS) are present and parse as finite floats — no exact value assertion.
 5. Restart server with `prometheus.enable=0`; assert GET `/metrics` returns 404 and `/index/api/getServerConfig` still works (verifies the switch does not pollute other routes).

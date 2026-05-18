@@ -29,7 +29,7 @@ curl -sS http://<host>/metrics | head -40
 ```
 Expected: `200 OK`, `Content-Type: text/plain; version=0.0.4; charset=utf-8`,
 ~38 series including `zlm_build_info`, `zlm_uptime_seconds`, `zlm_thread_load_percent{...}`,
-`zlm_stream_total{schema="..."}`.
+`zlm_streams{schema="..."}`.
 
 ### 2b. JSON debug view
 ```sh

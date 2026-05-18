@@ -155,8 +155,8 @@ int main(int argc, char *argv[]) {
         EXPECT(contains(r.body, "zlm_build_info{"), "body has zlm_build_info series with labels");
 
         EXPECT(contains(r.body, "zlm_uptime_seconds"), "body has uptime metric");
-        EXPECT(contains(r.body, "zlm_stream_total{schema=\"rtmp\"}"), "body has rtmp stream gauge");
-        EXPECT(contains(r.body, "zlm_stream_total{schema=\"rtsp\"}"), "body has rtsp stream gauge");
+        EXPECT(contains(r.body, "zlm_streams{schema=\"rtmp\"}"), "body has rtmp stream gauge");
+        EXPECT(contains(r.body, "zlm_streams{schema=\"rtsp\"}"), "body has rtsp stream gauge");
         EXPECT(contains(r.body, "zlm_thread_load_percent{thread_id=\"0\",type=\"poller\"}"),
                "body has poller-0 load");
 

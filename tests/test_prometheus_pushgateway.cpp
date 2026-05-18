@@ -192,8 +192,8 @@ int main() {
                    "Content-Type is text/plain: " + first.content_type);
             EXPECT(first.body.find("zlm_build_info") != string::npos,
                    "body contains zlm_build_info");
-            EXPECT(first.body.find("zlm_stream_total") != string::npos,
-                   "body contains zlm_stream_total");
+            EXPECT(first.body.find("zlm_streams") != string::npos,
+                   "body contains zlm_streams");
         }
         EXPECT(Prometheus::Collector::Instance().totalPushAttempts() >= 2,
                "Collector recorded >= 2 push attempts (got " + to_string(Prometheus::Collector::Instance().totalPushAttempts()) + ")");

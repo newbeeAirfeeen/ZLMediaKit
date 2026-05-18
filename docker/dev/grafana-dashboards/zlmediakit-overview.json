@@ -25,7 +25,7 @@
       "type": "stat",
       "title": "Open FDs",
       "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
-      "targets": [{ "expr": "zlm_open_files_total", "refId": "A" }]
+      "targets": [{ "expr": "zlm_open_fds", "refId": "A" }]
     },
     {
       "id": 4,
@@ -58,7 +58,7 @@
       "title": "Streams by schema",
       "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "zlm_stream_total", "refId": "A", "legendFormat": "{{schema}}" }
+        { "expr": "zlm_streams", "refId": "A", "legendFormat": "{{schema}}" }
       ]
     },
     {
@@ -67,7 +67,7 @@
       "title": "Sessions by type",
       "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "zlm_session_total", "refId": "A", "legendFormat": "{{type}}" }
+        { "expr": "zlm_sessions", "refId": "A", "legendFormat": "{{type}}" }
       ]
     }
   ]

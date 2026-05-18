@@ -122,12 +122,14 @@ void Collector::init() {
     _fam_cpu            = &reg.registerGauge("zlm_cpu_usage_percent", "Process CPU usage percent");
     _fam_mem_rss        = &reg.registerGauge("zlm_memory_rss_bytes", "Process resident set size in bytes");
     _fam_mem_virt       = &reg.registerGauge("zlm_memory_virtual_bytes", "Process virtual memory size in bytes");
-    _fam_threads_total  = &reg.registerGauge("zlm_threads_total", "Total number of OS threads in this process");
-    _fam_open_files     = &reg.registerGauge("zlm_open_files_total", "Number of open file descriptors");
+    // Naming: gauges must NOT use the `_total` suffix (reserved for counters per
+    // Prometheus best practices). promtool check metrics enforces this.
+    _fam_threads_total  = &reg.registerGauge("zlm_threads", "Total number of OS threads in this process");
+    _fam_open_files     = &reg.registerGauge("zlm_open_fds", "Number of open file descriptors");
     _fam_thread_load    = &reg.registerGauge("zlm_thread_load_percent", "Per-thread load percent (poller and work pools)");
-    _fam_stream_total   = &reg.registerGauge("zlm_stream_total", "Number of currently registered media streams, by schema");
-    _fam_stream_readers = &reg.registerGauge("zlm_stream_total_readers", "Total reader count across streams, by schema");
-    _fam_session_total  = &reg.registerGauge("zlm_session_total", "Number of active sessions, by type");
+    _fam_stream_total   = &reg.registerGauge("zlm_streams", "Number of currently registered media streams, by schema");
+    _fam_stream_readers = &reg.registerGauge("zlm_stream_readers", "Total reader count across streams, by schema");
+    _fam_session_total  = &reg.registerGauge("zlm_sessions", "Number of active sessions, by type");
 
     registerBuildInfo();
 
