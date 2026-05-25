@@ -29,13 +29,15 @@ ENV PATH=/opt/rh/devtoolset-9/root/usr/bin:$PATH \
 
 # aarch64 交叉工具链（Bootlin glibc 2.31 + GCC 9.3：GCC>=7，目标 glibc 兼容现代发行版且满足 ffmpeg 的 GLIBC_2.28 下限）
 # 注：若目标机 glibc 与此不符，调整此处 Bootlin 版本即可。
+# 必须解压到原始前缀路径(不 strip),否则编译器内置 sysroot 路径错位导致找不到 crt*.o/glibc。
 ENV CROSS_TRIPLE=aarch64-linux \
-    CROSS_ROOT=/opt/aarch64-toolchain \
-    CROSS_SYSROOT=/opt/aarch64-sysroot
-RUN mkdir -p ${CROSS_ROOT} && cd /tmp && \
+    CROSS_ROOT=/opt/aarch64--glibc--stable-2020.08-1
+ENV CROSS_SYSROOT=${CROSS_ROOT}/aarch64-buildroot-linux-gnu/sysroot
+RUN cd /opt && \
     wget -q https://toolchains.bootlin.com/downloads/releases/toolchains/aarch64/tarballs/aarch64--glibc--stable-2020.08-1.tar.bz2 && \
-    tar -xjf aarch64--glibc--stable-2020.08-1.tar.bz2 -C ${CROSS_ROOT} --strip-components=1 && \
-    rm -f aarch64--glibc--stable-2020.08-1.tar.bz2
+    tar -xjf aarch64--glibc--stable-2020.08-1.tar.bz2 -C /opt && \
+    rm -f aarch64--glibc--stable-2020.08-1.tar.bz2 && \
+    ( cd ${CROSS_ROOT} && ./relocate-sdk.sh || true )
 ENV PATH=${CROSS_ROOT}/bin:$PATH
 
 # CMake：直接用 Kitware 预编译 x86_64 二进制(构建机为 x86_64,cmake 在宿主运行),避免源码编译的脆弱与耗时
