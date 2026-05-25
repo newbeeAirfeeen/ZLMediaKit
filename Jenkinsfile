@@ -23,6 +23,8 @@ pipeline {
             steps{
                 script {
                     def archive_name = "ZLMediakit-fmp4-${params.TARGET_ARCH}-${env.NODE_NAME}.${env.BUILD_ID}.${env.GIT_COMMIT}.tar.gz"
+                    // 清理持久化工作区可能残留的旧 cmake 缓存(切换构建方式后必须),避免复用过期 toolchain/编译器
+                    sh "rm -rf build out temp target"
                     sh "cmake -B build \
                               -DCMAKE_BUILD_TYPE=Release \
                               -DCMAKE_INSTALL_PREFIX=${WORKSPACE}/out"
