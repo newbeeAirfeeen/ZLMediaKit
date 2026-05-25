@@ -26,10 +26,14 @@ set(CMAKE_STRIP        ${CROSS_TRIPLE}-strip)
 if(DEFINED ENV{CROSS_SYSROOT})
     set(CMAKE_SYSROOT $ENV{CROSS_SYSROOT})
     set(CMAKE_FIND_ROOT_PATH $ENV{CROSS_SYSROOT})
+    # openssl 等依赖装在 sysroot/usr,显式加入前缀路径供 find_package 定位
+    list(APPEND CMAKE_PREFIX_PATH $ENV{CROSS_SYSROOT}/usr)
+    set(OPENSSL_ROOT_DIR $ENV{CROSS_SYSROOT}/usr)
 endif()
 
-# 在 sysroot 内查找库/头文件，但程序(编译器/工具)仍用宿主机的
+# 在 sysroot 内查找库/头文件，但程序(编译器/工具)仍用宿主机的;
+# PACKAGE 用 BOTH 以便 OPENSSL_ROOT_DIR 等绝对路径提示生效
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)

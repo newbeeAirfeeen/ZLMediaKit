@@ -19,6 +19,9 @@ pipeline {
                 sh '''
                     if [ "${TARGET_ARCH}" = "arm64" ]; then
                         ${CROSS_TRIPLE}-gcc -v
+                        echo "=== cross sysroot openssl ==="
+                        ls -la ${CROSS_SYSROOT}/usr/lib/libssl* ${CROSS_SYSROOT}/usr/lib64/libssl* 2>/dev/null || true
+                        ls -d ${CROSS_SYSROOT}/usr/include/openssl 2>/dev/null || true
                     fi
                 '''
             }
