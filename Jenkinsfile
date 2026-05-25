@@ -31,8 +31,10 @@ pipeline {
                     def cmake_extra = ""
                     def strip_cmd = "strip"
                     if (params.TARGET_ARCH == 'arm64') {
-                        cmake_extra = "-DCMAKE_TOOLCHAIN_FILE=${WORKSPACE}/cmake/aarch64-linux-gnu.toolchain.cmake -DOPENSSL_ROOT_DIR=${CROSS_SYSROOT}/usr"
-                        strip_cmd = "${CROSS_TRIPLE}-strip"
+                        // 交叉 sysroot/三元组由 jenkins.Dockerfile 固定(CROSS_SYSROOT=/opt/aarch64-sysroot, CROSS_TRIPLE=aarch64-linux),
+                        // 这些是容器环境变量,不在 Groovy 绑定里,故此处按 Dockerfile 约定写死路径
+                        cmake_extra = "-DCMAKE_TOOLCHAIN_FILE=${WORKSPACE}/cmake/aarch64-linux-gnu.toolchain.cmake -DOPENSSL_ROOT_DIR=/opt/aarch64-sysroot/usr"
+                        strip_cmd = "aarch64-linux-strip"
                     }
                     sh "cmake -B build \
                               -DCMAKE_BUILD_TYPE=Release \
