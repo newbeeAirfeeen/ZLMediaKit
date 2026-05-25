@@ -38,12 +38,12 @@ RUN mkdir -p ${CROSS_ROOT} && cd /tmp && \
     rm -f aarch64--glibc--stable-2020.08-1.tar.bz2
 ENV PATH=${CROSS_ROOT}/bin:$PATH
 
-# CMake（native，构建过程统一使用）
+# CMake：直接用 Kitware 预编译 x86_64 二进制(构建机为 x86_64,cmake 在宿主运行),避免源码编译的脆弱与耗时
 RUN cd /opt && \
-    wget -q https://github.com/Kitware/CMake/releases/download/v3.28.0/cmake-3.28.0.tar.gz && \
-    tar -zxf cmake-3.28.0.tar.gz && cd cmake-3.28.0 && \
-    ./bootstrap --parallel=$(nproc) && make -j$(nproc) && make install && \
-    cd /opt && rm -rf cmake-3.28.0 cmake-3.28.0.tar.gz
+    wget -q https://github.com/Kitware/CMake/releases/download/v3.28.0/cmake-3.28.0-linux-x86_64.tar.gz && \
+    tar -zxf cmake-3.28.0-linux-x86_64.tar.gz && \
+    rm -f cmake-3.28.0-linux-x86_64.tar.gz
+ENV PATH=/opt/cmake-3.28.0-linux-x86_64/bin:$PATH
 
 # 原生 x86_64 OpenSSL（安装到 /usr/local）
 RUN cd /opt && \
