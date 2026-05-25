@@ -15,7 +15,7 @@ RUN sed -i 's|mirrorlist.centos.org|vault.centos.org|g' /etc/yum.repos.d/CentOS-
 
 # 基础依赖
 RUN yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm && \
-    yum install -y gcc gcc-c++ make curl tar wget unzip git perl-IPC-Cmd xz
+    yum install -y gcc gcc-c++ make curl tar wget unzip git perl-IPC-Cmd xz bzip2
 
 # 原生 GCC9（devtoolset-9）：满足"最低 GCC7"，且 devtoolset 静态链接新版 libstdc++，
 # 产物仍可在 glibc 2.17 上运行，保持 x86 兼容性。SCL 源同样切 vault。
