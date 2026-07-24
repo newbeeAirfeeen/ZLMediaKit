@@ -180,7 +180,11 @@ void RtspSessionAdapter::handleReq_Describe_l(const Parser &parser) {
         onRes("", ProtocolOption());
     }
 }
-
+void RtspSessionAdapter::onError(const toolkit::SockException &err) {
+    // 防止断流续推
+    _push_src = nullptr;
+    base_type::onError(err);
+}
 void RtspSessionAdapter::handleReq_Setup_l(const Parser &parser) {
     auto parser_ = const_cast<Parser&>(parser);
     // Transport: RTP/AVP/TCP;unicast;interleaved=2-3;mode=play -> Transport: RTP/AVP/TCP;unicast;interleaved=2-3;mode=record
