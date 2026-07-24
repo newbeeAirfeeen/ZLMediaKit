@@ -338,13 +338,13 @@ void installWebHook(){
 
     NoticeCenter::Instance().addListener(&web_hook_tag, Broadcast::kBroadcastMediaPublish, [](BroadcastMediaPublishArgs) {
         // 我们检查推流url.query中是否有magic_key是破格可以推流的
-        DebugL << "BroadcastMediaPublishArgs: " << args._full_url;
         if (check_magic_key(args._full_url, magic_key)) {
-            InfoL << "BroadcastMediaPublishArgs: " << args._full_url << " has magic_key, allow publish";
+            InfoL << "valid magic_key, allow publish: "
+                  << args._schema << "://" << args._vhost << "/" << args._app << "/" << args._streamid;
             invoker("", ProtocolOption());
             return;
         }else {
-            InfoL << "BroadcastMediaPublishArgs: " << args._full_url << " not has magic_key";
+            DebugL << "missing or invalid magic_key, continue normal publish authentication";
         }
 
 

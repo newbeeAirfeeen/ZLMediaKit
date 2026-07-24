@@ -68,24 +68,21 @@ auto check_magic_key(const std::string& url, const std::string& key) -> bool {
 #if defined(ENABLE_OPENSSL)
     std::string magic_key = get_magic_key(url);
     if(magic_key.empty()) {
-        return true;
+        return false;
     }
     auto decoded_key = aes_decrypt(magic_key, key);
-    DebugL << "magic key: " << decoded_key;
     const char* PATTERN = "[Closeli]|";
     auto it = decoded_key.find(PATTERN);
     if (it == std::string::npos) {
         return false;
     }
     auto content = decoded_key.substr(it + strlen(PATTERN));
-    DebugL << "magic key content: " << content;
     std::istringstream iss(content);
     // 解析 JSON
     Json::CharReaderBuilder builder;
     Json::Value root;
     // 从content解析json
     std::string errs;
-    TraceL << "json parse: " << content;
     if (!Json::parseFromStream(builder, iss, &root, &errs)) {
         WarnL << "json parse error: " << errs;
         return false;
@@ -99,6 +96,6 @@ auto check_magic_key(const std::string& url, const std::string& key) -> bool {
     }
     return true;
 #else
-    return true;
+    return false;
 #endif
 }
