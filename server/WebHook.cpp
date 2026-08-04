@@ -355,6 +355,7 @@ void installWebHook(){
         }
 
         GET_CONFIG(string,hook_publish,Hook::kOnPublish);
+        DebugL << "hook enable: " << hook_enable << ", param: " << args._param_strs <<", hook_admin: "<< hook_adminparams << ", hook_publish: " << hook_publish << ", peer_ip: " << sender.get_peer_ip();
         if (!hook_enable || args._param_strs == hook_adminparams || hook_publish.empty() || sender.get_peer_ip() == "127.0.0.1") {
             invoker("", ProtocolOption());
             return;
