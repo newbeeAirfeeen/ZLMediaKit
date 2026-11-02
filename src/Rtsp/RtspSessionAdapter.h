@@ -17,10 +17,15 @@ namespace mediakit {
 
     public:
         explicit RtspSessionAdapter(const toolkit::Socket::Ptr &sock);
-        ~RtspSessionAdapter() override = default;
+        ~RtspSessionAdapter() override;
 
     protected:
         void onWholeRtspPacket(Parser &parser) override;
+        void handleReq_Play(const Parser &parser) override;
+        void handleReq_Pause(const Parser &parser) override;
+        void handleReq_Teardown(const Parser &parser) override;
+        bool shouldAutoResumeSource() const override;
+        bool isPlaybackPaused() const override;
         void onError(const toolkit::SockException &err) override;
     private:
         void onWholeRtspPacket_l(Parser &parser);
@@ -29,9 +34,13 @@ namespace mediakit {
         void handleReq_Play_l(const Parser &parser);
 
     private:
+        void replayControl(bool paused, const Parser &parser);
+        SessionMeta::Ptr _player_meta;
+        bool _replay_started = false;
         bool _is_adapter_mode = false;
         std::string _session_id_saved;
     };
+using RtspSessionAdapterWithSSL = toolkit::SessionWithSSL<RtspSessionAdapter>;
 };
 
 

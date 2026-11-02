@@ -677,15 +677,20 @@ void MediaSourceEvent::onReaderChanged(MediaSource &sender, int size) {
         // 更新播放次数
         _last_played_count.store(size);
         _first_played.store(toolkit::getCurrentMillisecond(true));
-        AuthCenter::instance().media_changed(sender.getApp(), sender.getId(), size, _first_played.load());
+        AuthCenter::instance().media_changed(MediaInfo(sender.getUrl()), size, _first_played.load());
         // 这里我们记录从播放到无人播放的情况
     } else if (totalReaderCount(sender) == 0 && this->_last_played_count.load() != 0) {
         // 说明是无人播放
         InfoL << "no one played, app=" << sender.getApp() << ", stream_id=" << sender.getId();
         this->_last_played_count.store(size);
-        AuthCenter::instance().media_changed(sender.getApp(), sender.getId(), size, _first_played.load());
+        AuthCenter::instance().media_changed(MediaInfo(sender.getUrl()), size, _first_played.load());
     }
 
+    // 受控回放是否释放由 SP 决定；record app 和通用无人观看策略均不得越权关闭。
+    if (SessionMeta::find(MediaInfo(sender.getUrl()))) {
+        _async_close_timer = nullptr;
+        return;
+    }
     if (size || sender.totalReaderCount()) {
         // 还有人观看该视频，不触发关闭事件
         _async_close_timer = nullptr;

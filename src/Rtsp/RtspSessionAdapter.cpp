@@ -57,6 +57,7 @@ void RtspSessionAdapter::onWholeRtspPacket_l(Parser &parser) {
         return target == method;
     });
     if (not_allowed_it != METHOD_NOT_ALLOWED.end()) {
+        beginRequest(parser);
         sendRtspResponse("405 Forbidden", {"Connection","Close"}, "Adapter Rtsp Method Not Allowed");
         return;
     }
@@ -74,6 +75,7 @@ void RtspSessionAdapter::onWholeRtspPacket_l(Parser &parser) {
         return base_type::onWholeRtspPacket(parser);
     }
 
+    beginRequest(parser);
     (this->*(it->second))(parser);
     parser.Clear();
 }
@@ -94,7 +96,9 @@ void RtspSessionAdapter::handleReq_Describe_l(const Parser &parser) {
         throw SockException(Err_shutdown, StrPrinter << err << ":" << full_url);
     }
 
-    auto onRes = [this, full_url](const string &err, const ProtocolOption &option) {
+    auto request = _request_context;
+    auto onRes = [this, full_url, request](const string &err, const ProtocolOption &option) {
+        auto scope = useRequest(request);
         if (!err.empty()) {
             sendRtspResponse("401 Unauthorized", { "Content-Type", "text/plain" }, err);
             shutdown(SockException(Err_shutdown, StrPrinter << "401 Unauthorized:" << err));
@@ -182,7 +186,8 @@ void RtspSessionAdapter::handleReq_Describe_l(const Parser &parser) {
 }
 void RtspSessionAdapter::onError(const toolkit::SockException &err) {
     // 防止断流续推
-    _push_src = nullptr;
+    if (_player_meta) { _player_meta->playerLeft(getIdentifier()); }
+    if (_is_adapter_mode) { _push_src = nullptr; }
     base_type::onError(err);
 }
 void RtspSessionAdapter::handleReq_Setup_l(const Parser &parser) {
@@ -212,3 +217,77 @@ void RtspSessionAdapter::handleReq_Play_l(const Parser &parser) {
 
 
 
+
+RtspSessionAdapter::~RtspSessionAdapter() {
+    if (_player_meta) { _player_meta->playerLeft(getIdentifier()); }
+}
+bool RtspSessionAdapter::shouldAutoResumeSource() const {
+    return _is_adapter_mode || !SessionMeta::find(_media_info);
+}
+bool RtspSessionAdapter::isPlaybackPaused() const {
+    return _player_meta && _player_meta->isPaused();
+}
+void RtspSessionAdapter::handleReq_Play(const Parser &parser) {
+    auto meta = _is_adapter_mode ? nullptr : SessionMeta::find(_media_info);
+    if (!meta) { base_type::handleReq_Play(parser); return; }
+    if (_sessionid.empty() || parser["Session"] != _sessionid || _play_src.expired()) {
+        sendRtspResponse("454 Session Not Found"); return;
+    }
+    if (_close_after_response || none_of(_sdp_track.begin(), _sdp_track.end(),
+                                       [](const SdpTrack::Ptr &track) { return track->_inited; })) {
+        sendRtspResponse("455 Method Not Valid in This State"); return;
+    }
+    auto scale = parser["Scale"];
+    auto range = parser["Range"];
+    trim(scale); trim(range);
+    // 初次接入允许常见的 npt=0-/now-，但不把它解释成 seek 或恢复上游。
+    if ((!scale.empty() && scale != "1" && scale != "1.0") ||
+        (!range.empty() && range != "npt=now-" && !(!_replay_started && range == "npt=0-"))) {
+        sendRtspResponse("501 Not Implemented"); return;
+    }
+    if (_replay_started) { replayControl(false, parser); return; }
+    _player_meta = meta;
+    base_type::handleReq_Play(parser);
+    _replay_started = true;
+    meta->playerJoined(getIdentifier());
+}
+void RtspSessionAdapter::handleReq_Pause(const Parser &parser) {
+    if (!_player_meta && (_is_adapter_mode || !SessionMeta::find(_media_info))) {
+        base_type::handleReq_Pause(parser); return;
+    }
+    replayControl(true, parser);
+}
+void RtspSessionAdapter::replayControl(bool paused, const Parser &parser) {
+    if (_sessionid.empty() || parser["Session"] != _sessionid) {
+        sendRtspResponse("454 Session Not Found"); return;
+    }
+    if (!_player_meta || !_replay_started || _play_src.expired() || _close_after_response) {
+        sendRtspResponse("455 Method Not Valid in This State"); return;
+    }
+    auto request = _request_context;
+    Json::Value context;
+    context["cseq"] = request.cseq;
+    weak_ptr<RtspSessionAdapter> weak_self = dynamic_pointer_cast<RtspSessionAdapter>(shared_from_this());
+    _player_meta->control(paused, getIdentifier(), "rtsp", context, getPoller(),
+        [weak_self, request](const SessionMeta::Result &result) {
+            auto self = weak_self.lock();
+            if (!self) { return; }
+            auto scope = self->useRequest(request);
+            const char *status = "500 Internal Server Error";
+            if (result.accepted()) { status = "200 OK"; }
+            else if (result.code == 40401 || result.code == 41001) { status = "454 Session Not Found"; }
+            else if (result.code >= 40901 && result.code <= 40904) { status = "455 Method Not Valid in This State"; }
+            else if (result.code == 50101) { status = "501 Not Implemented"; }
+            // 保持同一个 reader；恢复不重新 attach，因此不会再次 flush GOP。
+            self->sendRtspResponse(status);
+        });
+}
+void RtspSessionAdapter::handleReq_Teardown(const Parser &parser) {
+    if (!_player_meta) { base_type::handleReq_Teardown(parser); return; }
+    if (parser["Session"] != _sessionid) { sendRtspResponse("454 Session Not Found"); return; }
+    _player_meta->playerLeft(getIdentifier());
+    _play_reader = nullptr;
+    // 先等待更早请求的响应输出，再关闭该播放器；绝不向 SP 发送任务 stop。
+    _close_after_response = _request_context.ordinal;
+    sendRtspResponse("200 OK");
+}

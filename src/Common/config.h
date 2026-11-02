@@ -282,6 +282,10 @@ extern const std::string kLowLatency;
 } // namespace Rtsp
 
 ////////////RTMP服务器配置///////////
+namespace Playback {
+extern const std::string kControlEnable;
+}
+
 namespace Rtmp {
 // 握手超时时间，默认15秒
 extern const std::string kHandshakeSecond;

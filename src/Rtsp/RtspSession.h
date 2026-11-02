@@ -12,6 +12,8 @@
 #define SESSION_RTSPSESSION_H_
 
 #include <set>
+#include <map>
+#include "Common/SessionMeta.h"
 #include <vector>
 #include <unordered_set>
 #include "Network/Session.h"
@@ -44,6 +46,15 @@ public:
     void onManager() override;
 
 protected:
+    struct RequestContext { uint64_t ordinal = 0; std::string cseq; };
+    void beginRequest(const Parser &parser);
+    // 异步回调作用域内恢复原请求信息，退出后还原，不能临时覆盖全局 _cseq 后遗忘。
+    std::shared_ptr<void> useRequest(const RequestContext &request);
+    virtual bool shouldAutoResumeSource() const { return true; }
+    virtual bool isPlaybackPaused() const { return false; }
+    virtual void handleReq_Play(const Parser &parser);
+    virtual void handleReq_Pause(const Parser &parser);
+    virtual void handleReq_Teardown(const Parser &parser);
     /////RtspSplitter override/////
     //收到完整的rtsp包回调，包括sdp等content数据
     void onWholeRtspPacket(Parser &parser) override;
@@ -87,11 +98,8 @@ private:
     //处理setup方法，播放和推流协商rtp传输方式用
     void handleReq_Setup(const Parser &parser);
     //处理play方法，开始或恢复播放
-    void handleReq_Play(const Parser &parser);
     //处理pause方法，暂停播放
-    void handleReq_Pause(const Parser &parser);
     //处理teardown方法，结束播放
-    void handleReq_Teardown(const Parser &parser);
     //处理Get方法,rtp over http才用到
     void handleReq_Get(const Parser &parser);
     //处理Post方法，rtp over http才用到
@@ -139,6 +147,11 @@ private:
     void setSocketFlags();
 
 private:
+    RequestContext _request_context;
+    uint64_t _next_request = 0, _next_response = 1;
+    uint64_t _close_after_response = 0;
+    std::map<uint64_t, toolkit::Buffer::Ptr> _responses;
+    bool _was_playback_paused = false;
     //是否已经触发on_play事件
     bool _emit_on_play = false;
     bool _send_sr_rtcp[2] = {true, true};

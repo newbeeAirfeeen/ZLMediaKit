@@ -61,6 +61,7 @@ target_link_libraries(zlmediakit
 target_include_directories(zlmediakit
   PRIVATE
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+    "${CMAKE_SOURCE_DIR}"
   PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
 

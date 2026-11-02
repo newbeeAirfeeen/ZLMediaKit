@@ -114,7 +114,10 @@ void RtspSession::onManager() {
         return;
     }
 
-    if (!_push_src && _rtp_type == Rtsp::RTP_UDP && _alive_ticker.elapsedTime() > keep_alive_sec * 4000) {
+    auto paused = isPlaybackPaused();
+    if (_was_playback_paused && !paused) { _alive_ticker.resetTime(); }
+    _was_playback_paused = paused;
+    if (!paused && !_push_src && _rtp_type == Rtsp::RTP_UDP && _alive_ticker.elapsedTime() > keep_alive_sec * 4000) {
         //rtp over udp播放器超时
         shutdown(SockException(Err_timeout, "rtp over udp player timeout"));
     }
@@ -131,9 +134,26 @@ void RtspSession::onRecv(const Buffer::Ptr &buf) {
     }
 }
 
+void RtspSession::beginRequest(const Parser &parser) {
+    _request_context.ordinal = ++_next_request;
+    _request_context.cseq = parser["CSeq"];
+    _cseq = atoi(_request_context.cseq.c_str());
+}
+
+std::shared_ptr<void> RtspSession::useRequest(const RequestContext &request) {
+    auto previous = _request_context;
+    auto previous_cseq = _cseq;
+    _request_context = request;
+    _cseq = atoi(request.cseq.c_str());
+    return std::make_shared<onceToken>(nullptr, [this, previous, previous_cseq]() {
+        _request_context = previous;
+        _cseq = previous_cseq;
+    });
+}
+
 void RtspSession::onWholeRtspPacket(Parser &parser) {
     string method = parser.Method(); //提取出请求命令字
-    _cseq = atoi(parser["CSeq"].data());
+    beginRequest(parser);
     if (_content_base.empty() && method != "GET") {
         _content_base = parser.Url();
         _media_info.parse(parser.FullUrl());
@@ -219,7 +239,9 @@ void RtspSession::handleReq_ANNOUNCE(const Parser &parser) {
         throw SockException(Err_shutdown, StrPrinter << err << ":" << full_url);
     }
 
-    auto onRes = [this, parser, full_url](const string &err, const ProtocolOption &option) {
+    auto request = _request_context;
+    auto onRes = [this, parser, full_url, request](const string &err, const ProtocolOption &option) {
+        auto scope = useRequest(request);
         if (!err.empty()) {
             sendRtspResponse("401 Unauthorized", { "Content-Type", "text/plain" }, err);
             shutdown(SockException(Err_shutdown, StrPrinter << "401 Unauthorized:" << err));
@@ -331,11 +353,13 @@ void RtspSession::handleReq_RECORD(const Parser &parser){
 void RtspSession::emitOnPlay(){
     weak_ptr<RtspSession> weak_self = dynamic_pointer_cast<RtspSession>(shared_from_this());
     //url鉴权回调
-    auto onRes = [weak_self](const string &err) {
+    auto request = _request_context;
+    auto onRes = [weak_self, request](const string &err) {
         auto strong_self = weak_self.lock();
         if (!strong_self) {
             return;
         }
+        auto scope = strong_self->useRequest(request);
         if (!err.empty()) {
             //播放url鉴权失败
             strong_self->sendRtspResponse("401 Unauthorized", {"Content-Type", "text/plain"}, err);
@@ -368,7 +392,7 @@ void RtspSession::emitOnPlay(){
     auto flag = _emit_on_play ? false : NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastMediaPlayed, _media_info, next_invoker, static_cast<SockInfo &>(*this));
     if (!flag) {
         //该事件无人监听,默认不鉴权
-        onRes("");
+        next_invoker("");
     }
     //已经鉴权过了
     _emit_on_play = true;
@@ -379,19 +403,21 @@ void RtspSession::handleReq_Describe(const Parser &parser) {
     auto authorization = parser["Authorization"];
     weak_ptr<RtspSession> weak_self = dynamic_pointer_cast<RtspSession>(shared_from_this());
     //rtsp专属鉴权是否开启事件回调
-    onGetRealm invoker = [weak_self, authorization](const string &realm) {
+    auto request = _request_context;
+    onGetRealm invoker = [weak_self, authorization, request](const string &realm) {
         auto strong_self = weak_self.lock();
         if (!strong_self) {
             //本对象已经销毁
             return;
         }
         //切换到自己的线程然后执行
-        strong_self->async([weak_self, realm, authorization]() {
+        strong_self->async([weak_self, realm, authorization, request]() {
             auto strong_self = weak_self.lock();
             if (!strong_self) {
                 //本对象已经销毁
                 return;
             }
+            auto scope = strong_self->useRequest(request);
             if (realm.empty()) {
                 //无需rtsp专属认证, 那么继续url通用鉴权认证(on_play)
                 strong_self->emitOnPlay();
@@ -417,11 +443,13 @@ void RtspSession::handleReq_Describe(const Parser &parser) {
 void RtspSession::onAuthSuccess() {
     TraceP(this);
     weak_ptr<RtspSession> weak_self = dynamic_pointer_cast<RtspSession>(shared_from_this());
-    MediaSource::findAsync(_media_info, weak_self.lock(), [weak_self](const MediaSource::Ptr &src){
+    auto request = _request_context;
+    MediaSource::findAsync(_media_info, weak_self.lock(), [weak_self, request](const MediaSource::Ptr &src){
         auto strong_self = weak_self.lock();
         if(!strong_self){
             return;
         }
+        auto scope = strong_self->useRequest(request);
         auto rtsp_src = dynamic_pointer_cast<RtspMediaSource>(src);
         if (!rtsp_src) {
             //未找到相应的MediaSource
@@ -486,19 +514,21 @@ void RtspSession::onAuthBasic(const string &realm, const string &auth_base64) {
     auto user = user_pwd_vec[0];
     auto pwd = user_pwd_vec[1];
     weak_ptr<RtspSession> weak_self = dynamic_pointer_cast<RtspSession>(shared_from_this());
-    onAuth invoker = [pwd, realm, weak_self](bool encrypted, const string &good_pwd) {
+    auto request = _request_context;
+    onAuth invoker = [pwd, realm, weak_self, request](bool encrypted, const string &good_pwd) {
         auto strong_self = weak_self.lock();
         if (!strong_self) {
             //本对象已经销毁
             return;
         }
         //切换到自己的线程执行
-        strong_self->async([weak_self, good_pwd, pwd, realm]() {
+        strong_self->async([weak_self, good_pwd, pwd, realm, request]() {
             auto strong_self = weak_self.lock();
             if (!strong_self) {
                 //本对象已经销毁
                 return;
             }
+            auto scope = strong_self->useRequest(request);
             //base64忽略encrypted参数，上层必须传入明文密码
             if (pwd == good_pwd) {
                 //提供的密码且匹配正确
@@ -547,7 +577,9 @@ void RtspSession::onAuthDigest(const string &realm,const string &auth_md5){
         return ;
     }
 
-    auto realInvoker = [this,realm,nonce,uri,username,response](bool ignoreAuth,bool encrypted,const string &good_pwd){
+    auto request = _request_context;
+    auto realInvoker = [this,realm,nonce,uri,username,response,request](bool ignoreAuth,bool encrypted,const string &good_pwd){
+        auto scope = useRequest(request);
         if(ignoreAuth){
             //忽略认证
             TraceP(this) << "auth ignored";
@@ -788,7 +820,7 @@ void RtspSession::handleReq_Play(const Parser &parser) {
     auto &strScale = parser["Scale"];
     auto &strRange = parser["Range"];
     StrCaseMap res_header;
-    if (!strScale.empty()) {
+    if (shouldAutoResumeSource() && !strScale.empty()) {
         //这是设置播放速度
         res_header.emplace("Scale", strScale);
         auto speed = atof(strScale.data());
@@ -796,7 +828,7 @@ void RtspSession::handleReq_Play(const Parser &parser) {
         InfoP(this) << "rtsp set play speed:" << speed;
     }
 
-    if (!strRange.empty()) {
+    if (shouldAutoResumeSource() && !strRange.empty()) {
         //这是seek操作
         res_header.emplace("Range", strRange);
         auto strStart = FindField(strRange.data(), "npt=", "-");
@@ -839,7 +871,7 @@ void RtspSession::handleReq_Play(const Parser &parser) {
     }
 
     //在回复rtsp信令后再恢复播放
-    play_src->pause(false);
+    if (shouldAutoResumeSource()) { play_src->pause(false); }
 
     setSocketFlags();
 
@@ -880,8 +912,8 @@ void RtspSession::handleReq_Pause(const Parser &parser) {
 void RtspSession::handleReq_Teardown(const Parser &parser) {
     _push_src = nullptr;
     //此时回复可能触发broken pipe事件，从而直接触发onError回调；所以需要先把_push_src置空，防止触发断流续推功能
+    _close_after_response = _request_context.ordinal;
     sendRtspResponse("200 OK");
-    throw SockException(Err_shutdown,"recv teardown request");
 }
 
 void RtspSession::handleReq_Get(const Parser &parser) {
@@ -1057,7 +1089,7 @@ static string dateStr(){
 
 bool RtspSession::sendRtspResponse(const string &res_code, const StrCaseMap &header_const, const string &sdp, const char *protocol){
     auto header = header_const;
-    header.emplace("CSeq",StrPrinter << _cseq);
+    header.emplace("CSeq", _request_context.ordinal ? _request_context.cseq : to_string(_cseq));
     if(!_sessionid.empty()){
         header.emplace("Session", _sessionid);
     }
@@ -1082,7 +1114,23 @@ bool RtspSession::sendRtspResponse(const string &res_code, const StrCaseMap &hea
         printer << sdp;
     }
 //	DebugP(this) << printer;
-    return send(std::make_shared<BufferString>(std::move(printer))) > 0 ;
+    auto packet = std::make_shared<BufferString>(std::move(printer));
+    if (!_request_context.ordinal) { return send(packet) > 0; }
+    // HTTP hook 可并行完成，但 RTSP 连接上的响应必须按请求接收次序发送。
+    _responses.emplace(_request_context.ordinal, packet);
+    while (true) {
+        auto it = _responses.find(_next_response);
+        if (it == _responses.end()) { break; }
+        auto response = std::move(it->second);
+        _responses.erase(it);
+        auto ordinal = _next_response++;
+        if (send(response) <= 0) { return false; }
+        if (_close_after_response == ordinal) {
+            shutdown(SockException(Err_shutdown, "recv teardown request"));
+            break;
+        }
+    }
+    return true;
 }
 
 ssize_t RtspSession::send(Buffer::Ptr pkt){

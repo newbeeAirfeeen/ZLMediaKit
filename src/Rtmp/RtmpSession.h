@@ -33,6 +33,23 @@ public:
     void onError(const toolkit::SockException &err) override;
     void onManager() override;
 protected:
+    virtual void onConnectProperties(const AMFValue &) {}
+    virtual void onPublishOptions(ProtocolOption &) {}
+    virtual bool onPublished(const RtmpMediaSourceImp::Ptr &) { return true; }
+    virtual bool onDataMessage(const std::string &, AMFDecoder &) { return false; }
+    virtual bool shouldAutoResumeSource() const { return true; }
+    virtual bool allowContinuePush() const { return true; }
+    virtual void onPlayerAttached() {}
+    const MediaInfo &mediaInfo() const { return _media_info; }
+    RtmpMediaSource::Ptr playSource() const { return _play_src.lock(); }
+    RtmpMediaSourceImp::Ptr publishSource() const { return _push_src; }
+    double requestId() const { return _recv_req_id; }
+    void replyControl(bool paused, double request_id, uint32_t stream_id, const SessionMeta::Result &result);
+    virtual void onCmd_play(AMFDecoder &dec);
+    virtual void onCmd_play2(AMFDecoder &dec);
+    virtual void onCmd_seek(AMFDecoder &dec);
+    virtual void onCmd_pause(AMFDecoder &dec);
+    virtual void onCmd_playCtrl(AMFDecoder &dec);
 
 private:
     void onProcessCmd(AMFDecoder &dec);
@@ -42,15 +59,10 @@ private:
     void onCmd_publish(AMFDecoder &dec);
     void onCmd_deleteStream(AMFDecoder &dec);
 
-    void onCmd_play(AMFDecoder &dec);
-    void onCmd_play2(AMFDecoder &dec);
     void doPlay(AMFDecoder &dec);
     void doPlayResponse(const std::string &err,const std::function<void(bool)> &cb);
     void sendPlayResponse(const std::string &err,const RtmpMediaSource::Ptr &src);
 
-    void onCmd_seek(AMFDecoder &dec);
-    void onCmd_pause(AMFDecoder &dec);
-    void onCmd_playCtrl(AMFDecoder &dec);
     void setMetaData(AMFDecoder &dec);
 
     void onSendMedia(const RtmpPacket::Ptr &pkt);

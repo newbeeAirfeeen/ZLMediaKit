@@ -228,6 +228,11 @@ static onceToken token([]() {
 } // namespace Rtsp
 
 ////////////RTMP服务器配置///////////
+namespace Playback {
+const string kControlEnable = "playback.control_enable";
+static onceToken token([]() { mINI::Instance()[kControlEnable] = 0; }, nullptr);
+}
+
 namespace Rtmp {
 #define RTMP_FIELD "rtmp."
 const string kModifyStamp = RTMP_FIELD "modifyStamp";

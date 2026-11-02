@@ -26,10 +26,7 @@ RtmpSession::RtmpSession(const Socket::Ptr &sock)
 
 RtmpSession::~RtmpSession() {
     DebugP(this);
-    // 另外我们再销毁的时候
-    if (_push_src) {
-        AuthCenter::instance().unreigst_auth(_media_info);
-    }
+
 }
 
 void RtmpSession::onError(const SockException &err) {
@@ -47,13 +44,17 @@ void RtmpSession::onError(const SockException &err) {
             static_cast<SockInfo &>(*this));
     }
 
+    if (!allowContinuePush()) {
+        _push_src_ownership = nullptr;
+        _push_src = nullptr;
+        return;
+    }
     // 如果是主动关闭的，那么不延迟注销
     if (_push_src && _continue_push_ms && err.getErrCode() != Err_shutdown) {
-        // 取消所有权
-        _push_src_ownership = nullptr;
-        // 延时10秒注销流
+        // 先建立保留窗口再交出所有权，后续发布者可取消旧窗口的源引用。
         auto push_src = std::move(_push_src);
-        getPoller()->doDelayTask(_continue_push_ms, [push_src]() { return 0; });
+        push_src->retainForReconnect(getPoller(), _continue_push_ms);
+        _push_src_ownership = nullptr;
     }
 }
 
@@ -106,13 +107,11 @@ void RtmpSession::onCmd_connect(AMFDecoder &dec) {
         }
     }
 
-    try {
-        this->_use_fmp4_or_ts = params["useFmp4OrTs"].as_integer();
-        this->_hook_url = params["hookUrl"].as_string();
-        this->_stream_proxy_session_id = params["sessionId"].as_string();
-    } catch (const std::exception &e) {
-        InfoL << e.what();
-    }
+    try { _use_fmp4_or_ts = params["useFmp4OrTs"].as_integer(); } catch (const exception &) {}
+    try { _hook_url = params["hookUrl"].as_string(); } catch (const exception &) {}
+    try { _stream_proxy_session_id = params["sessionId"].as_string(); } catch (const exception &) {}
+
+    onConnectProperties(params);
 
     bool ok = true; //(app == APP_NAME);
     AMFValue version(AMF_OBJECT);
@@ -150,12 +149,6 @@ void RtmpSession::onCmd_publish(AMFDecoder &dec) {
     _media_info.parse(_tc_url + "/" + getStreamId(dec.load<std::string>()));
     _media_info._schema = RTMP_SCHEMA;
 
-    if (!this->_hook_url.empty() && !this->_stream_proxy_session_id.empty()) {
-        InfoL << "hook_url:" << this->_hook_url << ", _stream_proxy_session_id:" << this->_stream_proxy_session_id << ", app: " << _media_info._app << ", streamid: " << _media_info._streamid;
-        // 我们在这里注册动态鉴权事件
-        AuthCenter::instance().regist_auth(_media_info, this->_hook_url, this->_stream_proxy_session_id);
-    }
-
     auto now_stream_index = _now_stream_index;
     auto use_fmp4_or_ts = _use_fmp4_or_ts;
     auto on_res = [this, token, now_stream_index, use_fmp4_or_ts](const string &err, const ProtocolOption &option) {
@@ -166,7 +159,10 @@ void RtmpSession::onCmd_publish(AMFDecoder &dec) {
             return;
         }
 
-        assert(!_push_src);
+        if (_push_src) { shutdown(SockException(Err_shutdown, "duplicate publish")); return; }
+        auto effective_option = option;
+        effective_option.use_fmp4_or_ts = use_fmp4_or_ts;
+        onPublishOptions(effective_option);
         auto src = MediaSource::find(RTMP_SCHEMA, _media_info._vhost, _media_info._app, _media_info._streamid);
         auto push_failed = (bool)src;
 
@@ -196,14 +192,26 @@ void RtmpSession::onCmd_publish(AMFDecoder &dec) {
         }
 
         if (!_push_src) {
-            const_cast<ProtocolOption&>(option).use_fmp4_or_ts = use_fmp4_or_ts;
             _push_src
                 = std::make_shared<RtmpMediaSourceImp>(_media_info._vhost, _media_info._app, _media_info._streamid);
             // 获取所有权
             _push_src_ownership = _push_src->getOwnership();
-            _push_src->setProtocolOption(option);
+            _push_src->setProtocolOption(effective_option);
         }
 
+        if (!onPublished(_push_src)) {
+            _push_src_ownership = nullptr;
+            _push_src = nullptr;
+            sendStatus({ "level", "error", "code", "NetStream.Publish.BadName", "description", "Stale replay publisher." });
+            shutdown(SockException(Err_shutdown, "stale replay publisher"));
+            return;
+        }
+        _push_src->cancelReconnectRetention();
+        // 只有发布成功、取得源所有权后才绑定动态路由，lease 跟随源而不是 socket。
+        if (!_hook_url.empty() && !_stream_proxy_session_id.empty()) {
+            _push_src->setAuthLease(AuthCenter::instance().regist_auth(
+                _media_info, _hook_url, _stream_proxy_session_id, _push_src->sessionMeta()));
+        }
         _push_src->setListener(dynamic_pointer_cast<MediaSourceEvent>(shared_from_this()));
         _continue_push_ms = option.continue_push_ms;
         sendStatus({ "level", "status", "code", "NetStream.Publish.Start", "description", "Started publishing stream.",
@@ -266,6 +274,7 @@ void RtmpSession::sendPlayResponse(const string &err, const RtmpMediaSource::Ptr
     bool auth_success = err.empty();
     bool ok = (src.operator bool() && auth_success);
     if (ok) {
+        if (!shouldAutoResumeSource()) { sendUserControl(CONTROL_STREAM_ISRECORDED, STREAM_MEDIA); }
         // stream begin
         sendUserControl(CONTROL_STREAM_BEGIN, STREAM_MEDIA);
     }
@@ -282,6 +291,7 @@ void RtmpSession::sendPlayResponse(const string &err, const RtmpMediaSource::Ptr
         return;
     }
 
+    _play_src = src;
     // onStatus(NetStream.Play.Start)
 
     sendStatus({ "level", "status", "code", "NetStream.Play.Start", "description", "Started playing.", "details",
@@ -312,7 +322,7 @@ void RtmpSession::sendPlayResponse(const string &err, const RtmpMediaSource::Ptr
 
     src->getConfigFrame([&](const RtmpPacket::Ptr &pkt) { onSendMedia(pkt); });
 
-    src->pause(false);
+    if (shouldAutoResumeSource()) { src->pause(false); }
     _ring_reader = src->getRing()->attach(getPoller());
     weak_ptr<RtmpSession> weak_self = dynamic_pointer_cast<RtmpSession>(shared_from_this());
     _ring_reader->setGetInfoCB([weak_self]() { return weak_self.lock(); });
@@ -338,8 +348,9 @@ void RtmpSession::sendPlayResponse(const string &err, const RtmpMediaSource::Ptr
         }
         strong_self->shutdown(SockException(Err_shutdown, "rtmp ring buffer detached"));
     });
-    src->pause(false);
+    if (shouldAutoResumeSource()) { src->pause(false); }
     _play_src = src;
+    onPlayerAttached();
     // 提高服务器发送性能
     setSocketFlags();
 }
@@ -354,10 +365,14 @@ void RtmpSession::doPlayResponse(const string &err, const std::function<void(boo
 
     // 鉴权成功，查找媒体源并回复
     weak_ptr<RtmpSession> weak_self = dynamic_pointer_cast<RtmpSession>(shared_from_this());
-    MediaSource::findAsync(_media_info, weak_self.lock(), [weak_self, cb](const MediaSource::Ptr &src) {
+    auto request_id = _recv_req_id;
+    auto stream_id = _now_stream_index;
+    MediaSource::findAsync(_media_info, weak_self.lock(), [weak_self, cb, request_id, stream_id](const MediaSource::Ptr &src) {
         auto rtmp_src = dynamic_pointer_cast<RtmpMediaSource>(src);
         auto strong_self = weak_self.lock();
         if (strong_self) {
+            strong_self->_recv_req_id = request_id;
+            strong_self->_now_stream_index = stream_id;
             strong_self->sendPlayResponse("", rtmp_src);
         }
         cb(rtmp_src.operator bool());
@@ -374,17 +389,19 @@ void RtmpSession::doPlay(AMFDecoder &dec) {
         }
     }));
     auto now_stream_index = _now_stream_index;
-    Broadcast::AuthInvoker invoker = [weak_self, token, now_stream_index](const string &err) {
+    auto request_id = _recv_req_id;
+    Broadcast::AuthInvoker invoker = [weak_self, token, now_stream_index, request_id](const string &err) {
         auto strong_self = weak_self.lock();
         if (!strong_self) {
             return;
         }
-        strong_self->async([weak_self, err, token, now_stream_index]() {
+        strong_self->async([weak_self, err, token, now_stream_index, request_id]() {
             auto strong_self = weak_self.lock();
             if (!strong_self) {
                 return;
             }
             strong_self->_now_stream_index = now_stream_index;
+            strong_self->_recv_req_id = request_id;
             strong_self->doPlayResponse(err, [token](bool) {});
         });
     };
@@ -401,7 +418,7 @@ void RtmpSession::doPlay(AMFDecoder &dec) {
         Broadcast::kBroadcastMediaPlayed, _media_info, next_invoker, static_cast<SockInfo &>(*this));
     if (!flag) {
         // 该事件无人监听,默认不鉴权
-        doPlayResponse("", [token](bool) {});
+        next_invoker("");
     }
 }
 
@@ -450,6 +467,18 @@ void RtmpSession::onCmd_play(AMFDecoder &dec) {
     _media_info.parse(_tc_url + "/" + getStreamId(dec.load<std::string>()));
     _media_info._schema = RTMP_SCHEMA;
     doPlay(dec);
+}
+
+void RtmpSession::replyControl(bool paused, double request_id, uint32_t stream_id, const SessionMeta::Result &result) {
+    AMFValue status(AMF_OBJECT);
+    status.set("level", result.accepted() ? "status" : "error");
+    status.set("code", result.accepted() ? (paused ? "NetStream.Pause.Notify" : "NetStream.Unpause.Notify") : "NetStream.Failed");
+    status.set("description", result.result);
+    AMFEncoder enc;
+    enc << "onStatus" << request_id << nullptr << status;
+    // 不依赖可能被后续请求覆盖的 _recv_req_id / _now_stream_index。
+    sendRtmp(MSG_CMD, stream_id, enc.data(), 0, CHUNK_CLIENT_REQUEST_AFTER);
+    if (result.accepted()) { sendUserControl(paused ? CONTROL_STREAM_EOF : CONTROL_STREAM_BEGIN, stream_id); }
 }
 
 void RtmpSession::onCmd_pause(AMFDecoder &dec) {
@@ -538,7 +567,7 @@ void RtmpSession::onRtmpChunk(RtmpPacket::Ptr packet) {
             } else if (type == "onMetaData") {
                 // 兼容某些不规范的推流器
                 _push_metadata = dec.load<AMFValue>();
-            } else {
+            } else if (!onDataMessage(type, dec)) {
                 TraceP(this) << "unknown notify:" << type;
             }
             break;

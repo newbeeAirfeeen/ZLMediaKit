@@ -19,6 +19,7 @@
 #include "Rtsp/RtspSession.h"
 #include "Http/HttpSession.h"
 #include "WebHook.h"
+#include "Common/SessionMeta.h"
 #include "WebApi.h"
 
 using namespace std;
@@ -590,6 +591,7 @@ void installWebHook(){
     });
 
     NoticeCenter::Instance().addListener(&web_hook_tag,Broadcast::kBroadcastStreamNoneReader,[](BroadcastStreamNoneReaderArgs) {
+        if (SessionMeta::find(MediaInfo(sender.getUrl()))) { return; }
         if (!origin_urls.empty()) {
             //边沿站无人观看时立即停止溯源
             sender.close(false);

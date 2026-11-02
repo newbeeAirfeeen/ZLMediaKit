@@ -20,6 +20,7 @@
 #include "Rtmp.h"
 #include "RtmpMediaSource.h"
 #include "Common/MultiMediaSourceMuxer.h"
+#include "Common/SessionMeta.h"
 
 namespace mediakit {
 class RtmpDemuxer;
@@ -36,7 +37,15 @@ public:
      */
     RtmpMediaSourceImp(const std::string &vhost, const std::string &app, const std::string &id, int ringSize = RTMP_GOP_SIZE);
 
-    ~RtmpMediaSourceImp() override = default;
+    ~RtmpMediaSourceImp() override { if (_session_meta) { _session_meta->stop(); } }
+    const SessionMeta::Ptr &sessionMeta() const { return _session_meta; }
+    void setSessionMeta(const SessionMeta::Ptr &meta) {
+        _session_meta = meta;
+        if (meta) { meta->setReady(_all_track_ready); }
+    }
+    void setAuthLease(std::shared_ptr<void> lease) { _auth_lease = std::move(lease); }
+    void retainForReconnect(const toolkit::EventPoller::Ptr &poller, uint32_t delay_ms);
+    void cancelReconnectRetention();
 
     /**
      * 设置metadata
@@ -86,6 +95,17 @@ public:
     void setListener(const std::weak_ptr<MediaSourceEvent> &listener) override;
 
 private:
+    struct ReconnectRetention {
+        std::mutex mutex;
+        Ptr source;
+        void release() {
+            Ptr old;
+            { std::lock_guard<std::mutex> lock(mutex); old.swap(source); }
+        }
+    };
+    std::weak_ptr<ReconnectRetention> _reconnect_retention;
+    SessionMeta::Ptr _session_meta;
+    std::shared_ptr<void> _auth_lease;
     bool _all_track_ready = false;
     bool _recreate_metadata = false;
     ProtocolOption _option;

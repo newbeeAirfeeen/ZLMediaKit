@@ -13,35 +13,52 @@ AuthCenter &AuthCenter::instance() {
     return instance;
 }
 
-void AuthCenter::regist_auth(const mediakit::MediaInfo &info, const std::string &url, const std::string &session_id) {
+std::shared_ptr<void> AuthCenter::regist_auth(const MediaInfo &info, const std::string &url,
+                                            const std::string &session_id, const SessionMeta::Ptr &meta) {
     auto key = generate_key(info);
     std::lock_guard<std::mutex> lck(_mtx);
     AuthEntry entry;
     entry._url = url;
     entry._session_id = session_id;
+    entry._owner = ++_next_owner;
+    entry._meta = meta;
+    auto owner = entry._owner;
     _auth_entry_map[key] = entry;
+    return std::shared_ptr<void>(new uint64_t(owner), [this, info, owner](void *p) {
+        delete static_cast<uint64_t *>(p);
+        unreigst_auth(info, owner);
+    });
 }
-void AuthCenter::unreigst_auth(const mediakit::MediaInfo &info) {
-    auto key = generate_key(info);
+void AuthCenter::unreigst_auth(const MediaInfo &info, uint64_t owner) {
     std::lock_guard<std::mutex> lck(_mtx);
-    _auth_entry_map.erase(key);
+    auto it = _auth_entry_map.find(generate_key(info));
+    if (it != _auth_entry_map.end() && it->second._owner == owner) { _auth_entry_map.erase(it); }
+}
+SessionMeta::Ptr AuthCenter::sessionMeta(const MediaInfo &info) {
+    std::lock_guard<std::mutex> lck(_mtx);
+    auto it = _auth_entry_map.find(generate_key(info));
+    return it == _auth_entry_map.end() ? nullptr : it->second._meta.lock();
 }
 auto AuthCenter::auth(const mediakit::MediaInfo &info, const mediakit::Broadcast::AuthInvoker &invoker) -> bool {
     auto key = generate_key(info);
-    std::lock_guard<std::mutex> lck(_mtx);
-    auto it = _auth_entry_map.find(key);
-    if (it == _auth_entry_map.end()) {
-        EventPollerPool::Instance().getPoller(false)->async([invoker]() {
-            InfoL << "动态鉴权中心无人鉴权";
-            invoker("");
-        }, false);
-        return false;
+    AuthEntry entry;
+    {
+        std::lock_guard<std::mutex> lck(_mtx);
+        auto it = _auth_entry_map.find(key);
+        if (it == _auth_entry_map.end()) {
+            EventPollerPool::Instance().getPoller(false)->async([invoker]() {
+                InfoL << "动态鉴权中心无人鉴权";
+                invoker("");
+            }, false);
+            return false;
+        }
+        entry = it->second;
     }
-    auto uri = it->second._url;
+    auto uri = entry._url;
     HttpRequester::Ptr requester(new HttpRequester);
     Json::Value value;
     value["type"] = "auth";
-    value["session_id"] = it->second._session_id;
+    value["session_id"] = entry._session_id;
     value["url"] = info._full_url;
     requester->setMethod("POST");
     requester->setBody(value.toStyledString());
@@ -72,20 +89,26 @@ auto AuthCenter::auth(const mediakit::MediaInfo &info, const mediakit::Broadcast
         10.0);
     return true;
 }
-auto AuthCenter::media_changed(const std::string &app, const std::string &id, int reader_count, uint64_t first_played)
+auto AuthCenter::media_changed(const MediaInfo &info, int reader_count, uint64_t first_played)
     -> bool {
-    auto key = app + ":" + id;
-    std::lock_guard<std::mutex> lck(_mtx);
-    auto it = _auth_entry_map.find(key);
-    if (it == _auth_entry_map.end()) {
-        return false;
-    }
+    auto key = generate_key(info);
+    auto app = info._app;
+    auto id = info._streamid;
+    AuthEntry entry;
+    {
+        std::lock_guard<std::mutex> lck(_mtx);
+        auto it = _auth_entry_map.find(key);
+        if (it == _auth_entry_map.end()) {
+            return false;
+        }
 
-    auto uri = it->second._url;
+        entry = it->second;
+    }
+    auto uri = entry._url;
     HttpRequester::Ptr requester(new HttpRequester);
     Json::Value value;
     value["type"] = "media_changed";
-    value["session_id"] = it->second._session_id;
+    value["session_id"] = entry._session_id;
     value["total_reader"] = static_cast<uint64_t>(reader_count);
     value["first_player_created"] = first_played;
     requester->setMethod("POST");
@@ -103,5 +126,5 @@ auto AuthCenter::media_changed(const std::string &app, const std::string &id, in
     return true;
 }
 std::string AuthCenter::generate_key(const mediakit::MediaInfo &info) {
-    return info._app + ":" + info._streamid;
+    return info._vhost + "\n" + info._app + "\n" + info._streamid;
 }
