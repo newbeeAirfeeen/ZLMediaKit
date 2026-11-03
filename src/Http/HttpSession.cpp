@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <algorithm>
+#include <vector>
 #include "Common/config.h"
 #include "strCoding.h"
 #include "HttpSession.h"
@@ -22,6 +23,38 @@ using namespace std;
 using namespace toolkit;
 
 namespace mediakit {
+
+static const vector<string> &getAllowedHttpMethods() {
+    GET_CONFIG_FUNC(vector<string>, methods, Http::kAllowMethods, [](const string &value) {
+        vector<string> result;
+        for (auto method : split(value, ",")) {
+            strToUpper(trim(method));
+            if (method.empty()) {
+                continue;
+            }
+            if (method != "GET" && method != "POST" && method != "HEAD" && method != "OPTIONS") {
+                WarnL << "忽略不支持的HTTP方法配置:" << method;
+                continue;
+            }
+            if (find(result.begin(), result.end(), method) == result.end()) {
+                result.emplace_back(std::move(method));
+            }
+        }
+        return result;
+    });
+    return methods;
+}
+
+static string getHttpAllowHeader() {
+    string result;
+    for (auto &method : getAllowedHttpMethods()) {
+        if (!result.empty()) {
+            result += ", ";
+        }
+        result += method;
+    }
+    return result;
+}
 
 HttpSession::HttpSession(const Socket::Ptr &pSock) : Session(pSock) {
     TraceP(this);
@@ -42,11 +75,12 @@ void HttpSession::Handle_Req_HEAD(ssize_t &content_len){
 
 void HttpSession::Handle_Req_OPTIONS(ssize_t &content_len) {
     KeyValue header;
-    header.emplace("Allow", "GET, POST, OPTIONS");
+    auto methods = getHttpAllowHeader();
+    header.emplace("Allow", methods);
     header.emplace("Access-Control-Allow-Origin", "*");
     header.emplace("Access-Control-Allow-Credentials", "true");
-    header.emplace("Access-Control-Request-Methods", "GET, POST, OPTIONS");
-    header.emplace("Access-Control-Request-Headers", "Accept,Accept-Language,Content-Language,Content-Type");
+    header.emplace("Access-Control-Allow-Methods", methods);
+    header.emplace("Access-Control-Allow-Headers", "Accept,Accept-Language,Content-Language,Content-Type");
     sendResponse(200, true, nullptr, header);
 }
 
@@ -66,10 +100,16 @@ ssize_t HttpSession::onRecvHeader(const char *header,size_t len) {
     urlDecode(_parser);
     string cmd = _parser.Method();
     auto it = s_func_map.find(cmd);
-    if (it == s_func_map.end()) {
-        WarnP(this) << "不支持该命令:" << cmd;
-        sendResponse(405, true);
-        return 0;
+    const auto &methods = getAllowedHttpMethods();
+    if (it == s_func_map.end() || find(methods.begin(), methods.end(), cmd) == methods.end()) {
+        WarnP(this) << "不支持或未允许该HTTP方法:" << cmd;
+        KeyValue headers;
+        headers.emplace("Allow", getHttpAllowHeader());
+        sendResponse(405, true, nullptr, headers);
+        _parser.Clear();
+        // 连接即将关闭，丢弃请求体及流水线数据，不再继续解析请求。
+        _contentCallBack = nullptr;
+        return -1;
     }
 
     //跨域
@@ -519,7 +559,6 @@ private:
 };
 
 static const string kDate = "Date";
-static const string kServer = "Server";
 static const string kConnection = "Connection";
 static const string kKeepAlive = "Keep-Alive";
 static const string kContentType = "Content-Type";
@@ -553,7 +592,6 @@ void HttpSession::sendResponse(int code,
 
     HttpSession::KeyValue &headerOut = const_cast<HttpSession::KeyValue &>(header);
     headerOut.emplace(kDate, dateStr());
-    headerOut.emplace(kServer, kServerName);
     headerOut.emplace(kConnection, bClose ? "close" : "keep-alive");
     if (!bClose) {
         string keepAliveString = "timeout=";
@@ -607,7 +645,13 @@ void HttpSession::sendResponse(int code,
     if (!size) {
         //没有body
         if (bClose) {
-            shutdown(SockException(Err_shutdown,StrPrinter << "close connection after send http header completed with status code:" << code));
+            // TLS 接收回调内的响应需等待本轮 SSL flush 完成后再关闭连接。
+            weak_ptr<HttpSession> weak_self = dynamic_pointer_cast<HttpSession>(shared_from_this());
+            async([weak_self, code]() {
+                if (auto strong_self = weak_self.lock()) {
+                    strong_self->shutdown(SockException(Err_shutdown, StrPrinter << "close connection after send http header completed with status code:" << code));
+                }
+            }, false);
         }
         return;
     }

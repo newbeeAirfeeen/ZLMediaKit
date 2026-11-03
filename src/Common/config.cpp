@@ -162,6 +162,7 @@ namespace Http {
 const string kSendBufSize = HTTP_FIELD "sendBufSize";
 const string kMaxReqSize = HTTP_FIELD "maxReqSize";
 const string kKeepAliveSecond = HTTP_FIELD "keepAliveSecond";
+const string kAllowMethods = HTTP_FIELD "allowMethods";
 const string kCharSet = HTTP_FIELD "charSet";
 const string kRootPath = HTTP_FIELD "rootPath";
 const string kVirtualPath = HTTP_FIELD "virtualPath";
@@ -174,6 +175,7 @@ static onceToken token([]() {
     mINI::Instance()[kSendBufSize] = 64 * 1024;
     mINI::Instance()[kMaxReqSize] = 4 * 10240;
     mINI::Instance()[kKeepAliveSecond] = 15;
+    mINI::Instance()[kAllowMethods] = "GET,POST,HEAD";
     mINI::Instance()[kDirMenu] = true;
     mINI::Instance()[kVirtualPath] = "";
 
@@ -188,9 +190,6 @@ static onceToken token([]() {
                                                 "<head><title>404 Not Found</title></head>"
                                                 "<body bgcolor=\"white\">"
                                                 "<center><h1>您访问的资源不存在！</h1></center>"
-                                                "<hr><center>"
-                                             << kServerName
-                                             << "</center>"
                                                 "</body>"
                                                 "</html>"
                                              << endl;

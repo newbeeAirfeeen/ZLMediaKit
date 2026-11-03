@@ -240,6 +240,8 @@ extern const std::string kSendBufSize;
 extern const std::string kMaxReqSize;
 // http keep-alive秒数
 extern const std::string kKeepAliveSecond;
+// 允许的 HTTP 方法，逗号分隔；空值禁止所有方法
+extern const std::string kAllowMethods;
 // http 字符编码
 extern const std::string kCharSet;
 // http 服务器根目录
