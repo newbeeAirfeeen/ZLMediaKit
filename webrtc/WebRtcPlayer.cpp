@@ -37,6 +37,7 @@ WebRtcPlayer::WebRtcPlayer(const EventPoller::Ptr &poller,
 }
 
 void WebRtcPlayer::onStartWebRTC() {
+    if (_player_closed) { return; }
     CHECK(_play_src);
     WebRtcTransportImp::onStartWebRTC();
     if (canSendRtp()) {
@@ -56,6 +57,9 @@ void WebRtcPlayer::onStartWebRTC() {
                 strong_self->onSendRtp(rtp, ++i == pkt->size());
             });
         });
+        // 观察的是一次成功 WebRTC 播放，不是可切换的 UDP/TCP 网络连接。
+        _player_meta = SessionMeta::find(_media_info);
+        if (_player_meta) { _player_meta->playerJoined("webrtc:" + getIdentifier(), "webrtc"); }
         _reader->setDetachCB([weak_self]() {
             auto strong_self = weak_self.lock();
             if (!strong_self) {
@@ -67,7 +71,13 @@ void WebRtcPlayer::onStartWebRTC() {
     //使用完毕后，释放强引用，这样确保推流器断开后能及时注销媒体
     _play_src = nullptr;
 }
+void WebRtcPlayer::onShutdown(const SockException &ex) {
+    _player_closed = true;
+    if (_player_meta) { _player_meta->playerLeft("webrtc:" + getIdentifier()); }
+    WebRtcTransportImp::onShutdown(ex);
+}
 void WebRtcPlayer::onDestory() {
+    if (_player_meta) { _player_meta->playerLeft("webrtc:" + getIdentifier()); }
     WebRtcTransportImp::onDestory();
 
     auto duration = getDuration();
