@@ -8,7 +8,21 @@ RtmpSessionAdapter::~RtmpSessionAdapter() {
 }
 void RtmpSessionAdapter::onConnectProperties(const AMFValue &params) {
     GET_CONFIG(bool, enabled, Playback::kControlEnable);
-    _controlled = enabled && SessionMeta::parseConnect(params, _candidate);
+    bool has_lifecycle = false;
+    params.object_for_each([&](const string &key, const AMFValue &) {
+        if (key == "streamLifecycle") { has_lifecycle = true; }
+    });
+    SessionMeta::Snapshot lifecycle, control;
+    auto observed = SessionMeta::parseLifecycle(params, lifecycle);
+    _invalid_lifecycle = has_lifecycle && !observed;
+    _controlled = enabled && SessionMeta::parseConnect(params, control);
+    _candidate = _controlled ? control : lifecycle;
+    if (observed && _controlled) {
+        _invalid_lifecycle = _invalid_lifecycle || lifecycle.mode != "playback" || lifecycle.epoch != control.epoch;
+        _candidate.observed = true;
+        _candidate.task_instance = lifecycle.task_instance;
+    }
+    _managed = observed || _controlled;
 }
 void RtmpSessionAdapter::onPublishOptions(ProtocolOption &option) {
     if (_controlled) {
@@ -17,10 +31,11 @@ void RtmpSessionAdapter::onPublishOptions(ProtocolOption &option) {
     }
 }
 bool RtmpSessionAdapter::onPublished(const RtmpMediaSourceImp::Ptr &src) {
+    if (_invalid_lifecycle) { return false; }
     auto meta = src->sessionMeta();
     if (meta) {
-        if (!_controlled || !meta->bind(_candidate)) { return false; }
-    } else if (_controlled) {
+        if (!_managed || !meta->bind(_candidate)) { return false; }
+    } else if (_managed) {
         // 已初始化的普通源不能在续推时变为受控源，否则会沿用旧时间戳策略。
         if (src->getRing()) { return false; }
         meta = make_shared<SessionMeta>(mediaInfo(), _candidate, getPoller());
@@ -35,13 +50,19 @@ bool RtmpSessionAdapter::onDataMessage(const string &type, AMFDecoder &dec) {
     return true;
 }
 bool RtmpSessionAdapter::shouldAutoResumeSource() const {
-    return !SessionMeta::find(mediaInfo());
+    auto meta = SessionMeta::find(mediaInfo());
+    return !meta || !meta->isControlled();
+}
+bool RtmpSessionAdapter::isPlaybackStream() const {
+    auto meta = SessionMeta::find(mediaInfo());
+    return meta && meta->snapshot().mode == "playback";
 }
 bool RtmpSessionAdapter::allowContinuePush() const {
     auto src = publishSource();
     return !src || !src->sessionMeta() || !src->sessionMeta()->isPaused();
 }
 void RtmpSessionAdapter::onError(const SockException &err) {
+    _player_closed = true;
     if (_player_meta) { _player_meta->playerLeft(getIdentifier()); }
     auto src = publishSource();
     if (src && src->sessionMeta()) {
@@ -56,14 +77,15 @@ void RtmpSessionAdapter::onError(const SockException &err) {
     RtmpSession::onError(err);
 }
 void RtmpSessionAdapter::onPlayerAttached() {
+    if (_player_closed) { return; }
     auto meta = SessionMeta::find(mediaInfo());
     if (_player_meta && _player_meta != meta) { _player_meta->playerLeft(getIdentifier()); }
     _player_meta = meta;
-    if (meta) { meta->playerJoined(getIdentifier()); }
+    if (meta) { meta->playerJoined(getIdentifier(), "rtmp"); }
 }
 void RtmpSessionAdapter::onCmd_pause(AMFDecoder &dec) {
     auto meta = _player_meta ? _player_meta : SessionMeta::find(mediaInfo());
-    if (!meta) { RtmpSession::onCmd_pause(dec); return; }
+    if (!meta || !meta->isControlled()) { RtmpSession::onCmd_pause(dec); return; }
     dec.load<AMFValue>();
     bool paused = dec.load<bool>();
     auto request_id = requestId();
@@ -81,7 +103,8 @@ void RtmpSessionAdapter::onCmd_pause(AMFDecoder &dec) {
         });
 }
 bool RtmpSessionAdapter::rejectUnsupported() {
-    if (!_player_meta && !SessionMeta::find(mediaInfo())) { return false; }
+    auto meta = _player_meta ? _player_meta : SessionMeta::find(mediaInfo());
+    if (!meta || !meta->isControlled()) { return false; }
     replyControl(false, requestId(), _now_stream_index, {50101, "unsupported"});
     return true;
 }

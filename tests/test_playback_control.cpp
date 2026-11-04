@@ -46,7 +46,35 @@ int main() {
         const_cast<AMFValue &>(params["playbackControl"]) = control;
         require(!SessionMeta::parseConnect(params, s), "numeric epoch rejected");
         s.session_id = "task"; s.epoch = 1; s.version = 0; s.paused = false;
+        AMFValue observation(AMF_OBJECT), lifecycle(AMF_OBJECT);
+        observation.set("sessionId", "live-task"); observation.set("hookUrl", "http://127.0.0.1/control");
+        lifecycle.set("version", 1.0); lifecycle.set("mode", "live");
+        lifecycle.set("task_instance", "unique-stream"); lifecycle.set("publish_epoch", "1");
+        observation.set("streamLifecycle", lifecycle);
+        SessionMeta::Snapshot live;
+        require(SessionMeta::parseLifecycle(observation, live), "live lifecycle independently parsed");
+        require(live.observed && !live.controlled && !live.can_pause && !live.can_resume,
+                "observation must not grant replay capabilities");
+        require(live.mode == "live" && live.task_instance == "unique-stream", "task identity retained");
+        const_cast<AMFValue &>(observation["streamLifecycle"]["publish_epoch"]) = AMFValue(1.0);
+        require(!SessionMeta::parseLifecycle(observation, live), "numeric lifecycle epoch rejected");
+        const_cast<AMFValue &>(observation["streamLifecycle"]["publish_epoch"]) = AMFValue("1");
+        const_cast<AMFValue &>(observation["streamLifecycle"]["mode"]) = AMFValue("unknown");
+        require(!SessionMeta::parseLifecycle(observation, live), "unknown lifecycle mode rejected");
         MediaInfo stream("rtmp://127.0.0.1/live/test");
+        auto live_meta = make_shared<SessionMeta>(stream, live, poller);
+        require(live_meta->isObserved() && !live_meta->isControlled() && !live_meta->isPaused(),
+                "managed live is observed only");
+        auto live_next = live; live_next.epoch = 2; live_next.task_instance = "different-task";
+        require(!live_meta->bind(live_next), "different task cannot take over retained observation");
+        live_next.task_instance = live.task_instance;
+        require(live_meta->bind(live_next), "same live task can reconnect without control capability");
+        bool rejected_control = false;
+        live_meta->control(true, "player", "rtmp", Json::Value(), poller,
+                           [&](const SessionMeta::Result &result) { rejected_control = result.code == 50101; });
+        poller->sync([]() {});
+        poller->sync([]() {});
+        require(rejected_control, "observation-only control is rejected locally");
         auto meta = make_shared<SessionMeta>(stream, s, poller);
         require(meta->mergeResponse(response(2, 2, false), 1, 2).accepted(), "newer response accepted");
         require(meta->mergeResponse(response(1, 1, true), 1, 1).code == 40901, "old success reported as stale");

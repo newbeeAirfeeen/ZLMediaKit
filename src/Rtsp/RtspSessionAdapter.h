@@ -26,6 +26,7 @@ namespace mediakit {
         void handleReq_Teardown(const Parser &parser) override;
         bool shouldAutoResumeSource() const override;
         bool isPlaybackPaused() const override;
+        void onPlayerAttached() override;
         void onError(const toolkit::SockException &err) override;
     private:
         void onWholeRtspPacket_l(Parser &parser);
@@ -37,6 +38,7 @@ namespace mediakit {
         void replayControl(bool paused, const Parser &parser);
         SessionMeta::Ptr _player_meta;
         bool _replay_started = false;
+        bool _player_closed = false;
         bool _is_adapter_mode = false;
         std::string _session_id_saved;
     };

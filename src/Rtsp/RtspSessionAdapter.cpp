@@ -185,6 +185,7 @@ void RtspSessionAdapter::handleReq_Describe_l(const Parser &parser) {
     }
 }
 void RtspSessionAdapter::onError(const toolkit::SockException &err) {
+    _player_closed = true;
     // 防止断流续推
     if (_player_meta) { _player_meta->playerLeft(getIdentifier()); }
     if (_is_adapter_mode) { _push_src = nullptr; }
@@ -222,14 +223,25 @@ RtspSessionAdapter::~RtspSessionAdapter() {
     if (_player_meta) { _player_meta->playerLeft(getIdentifier()); }
 }
 bool RtspSessionAdapter::shouldAutoResumeSource() const {
-    return _is_adapter_mode || !SessionMeta::find(_media_info);
+    auto meta = SessionMeta::find(_media_info);
+    return _is_adapter_mode || !meta || !meta->isControlled();
 }
 bool RtspSessionAdapter::isPlaybackPaused() const {
     return _player_meta && _player_meta->isPaused();
 }
+void RtspSessionAdapter::onPlayerAttached() {
+    if (_is_adapter_mode || _player_closed) { return; }
+    auto meta = SessionMeta::find(_media_info);
+    if (_player_meta && _player_meta != meta) { _player_meta->playerLeft(getIdentifier()); }
+    _player_meta = meta;
+    if (meta) {
+        _replay_started = meta->isControlled();
+        meta->playerJoined(getIdentifier(), "rtsp");
+    }
+}
 void RtspSessionAdapter::handleReq_Play(const Parser &parser) {
     auto meta = _is_adapter_mode ? nullptr : SessionMeta::find(_media_info);
-    if (!meta) { base_type::handleReq_Play(parser); return; }
+    if (!meta || !meta->isControlled()) { base_type::handleReq_Play(parser); return; }
     if (_sessionid.empty() || parser["Session"] != _sessionid || _play_src.expired()) {
         sendRtspResponse("454 Session Not Found"); return;
     }
@@ -248,11 +260,11 @@ void RtspSessionAdapter::handleReq_Play(const Parser &parser) {
     if (_replay_started) { replayControl(false, parser); return; }
     _player_meta = meta;
     base_type::handleReq_Play(parser);
-    _replay_started = true;
-    meta->playerJoined(getIdentifier());
+
 }
 void RtspSessionAdapter::handleReq_Pause(const Parser &parser) {
-    if (!_player_meta && (_is_adapter_mode || !SessionMeta::find(_media_info))) {
+    auto meta = _player_meta ? _player_meta : SessionMeta::find(_media_info);
+    if (_is_adapter_mode || !meta || !meta->isControlled()) {
         base_type::handleReq_Pause(parser); return;
     }
     replayControl(true, parser);
@@ -285,9 +297,10 @@ void RtspSessionAdapter::replayControl(bool paused, const Parser &parser) {
 void RtspSessionAdapter::handleReq_Teardown(const Parser &parser) {
     if (!_player_meta) { base_type::handleReq_Teardown(parser); return; }
     if (parser["Session"] != _sessionid) { sendRtspResponse("454 Session Not Found"); return; }
+    _player_closed = true;
     _player_meta->playerLeft(getIdentifier());
     _play_reader = nullptr;
-    // 先等待更早请求的响应输出，再关闭该播放器；绝不向 SP 发送任务 stop。
+    // 上报一次离开事实，是否结束任务由 SP 决定；响应仍按原请求顺序发送。
     _close_after_response = _request_context.ordinal;
     sendRtspResponse("200 OK");
 }

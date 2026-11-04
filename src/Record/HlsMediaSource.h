@@ -66,6 +66,7 @@ private:
     toolkit::List<std::function<void(const std::string &)>> _list_cb;
 };
 
+class SessionMeta;
 class HlsCookieData {
 public:
     using Ptr = std::shared_ptr<HlsCookieData>;
@@ -81,6 +82,9 @@ private:
     void addReaderCount();
 
 private:
+    // 复用现有 cookie 观看周期，不把 HTTP 分片连接计为播放器。
+    std::shared_ptr<SessionMeta> _player_meta;
+    std::string _player_id;
     std::atomic<uint64_t> _bytes { 0 };
     MediaInfo _info;
     std::shared_ptr<bool> _added;

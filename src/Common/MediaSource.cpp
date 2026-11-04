@@ -686,7 +686,7 @@ void MediaSourceEvent::onReaderChanged(MediaSource &sender, int size) {
         AuthCenter::instance().media_changed(MediaInfo(sender.getUrl()), size, _first_played.load());
     }
 
-    // 受控回放是否释放由 SP 决定；record app 和通用无人观看策略均不得越权关闭。
+    // SP 管理的直播/回放均由 SP 决定生命周期，ZLM 仅上报；保留其原有到期语义。
     if (SessionMeta::find(MediaInfo(sender.getUrl()))) {
         _async_close_timer = nullptr;
         return;

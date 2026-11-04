@@ -38,6 +38,7 @@ protected:
     virtual bool onPublished(const RtmpMediaSourceImp::Ptr &) { return true; }
     virtual bool onDataMessage(const std::string &, AMFDecoder &) { return false; }
     virtual bool shouldAutoResumeSource() const { return true; }
+    virtual bool isPlaybackStream() const { return false; }
     virtual bool allowContinuePush() const { return true; }
     virtual void onPlayerAttached() {}
     const MediaInfo &mediaInfo() const { return _media_info; }

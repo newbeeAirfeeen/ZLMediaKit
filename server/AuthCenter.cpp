@@ -104,6 +104,9 @@ auto AuthCenter::media_changed(const MediaInfo &info, int reader_count, uint64_t
 
         entry = it->second;
     }
+    if (auto meta = entry._meta.lock()) {
+        if (meta->isObserved()) { return true; } // v2 使用有效播放会话，避免内部 reader 重复通知。
+    }
     auto uri = entry._url;
     HttpRequester::Ptr requester(new HttpRequester);
     Json::Value value;

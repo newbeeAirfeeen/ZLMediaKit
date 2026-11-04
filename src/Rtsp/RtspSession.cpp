@@ -857,6 +857,10 @@ void RtspSession::handleReq_Play(const Parser &parser) {
                  << "rtptime=" << (int) (track->_time_stamp * (track->_samplerate / 1000)) << ",";
     }
 
+    if (inited_tracks.empty()) {
+        sendRtspResponse("455 Method Not Valid in This State");
+        return;
+    }
     rtp_info.pop_back();
 
     res_header.emplace("RTP-Info", rtp_info);
@@ -894,6 +898,7 @@ void RtspSession::handleReq_Play(const Parser &parser) {
             strong_self->sendRtpPacket(pack);
         });
     }
+    onPlayerAttached();
 }
 
 void RtspSession::handleReq_Pause(const Parser &parser) {

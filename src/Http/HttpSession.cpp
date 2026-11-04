@@ -30,6 +30,7 @@ HttpSession::HttpSession(const Socket::Ptr &pSock) : Session(pSock) {
 }
 
 HttpSession::~HttpSession() {
+    if (_player_meta) { _player_meta->playerLeft(getIdentifier()); }
     TraceP(this);
 }
 
@@ -99,6 +100,8 @@ void HttpSession::onRecv(const Buffer::Ptr &pBuf) {
 }
 
 void HttpSession::onError(const SockException& err) {
+    _player_closed = true;
+    if (_player_meta) { _player_meta->playerLeft(getIdentifier()); }
     if (_is_live_stream) {
         //flv/ts播放器
         uint64_t duration = _ticker.createdTime() / 1000;
@@ -293,6 +296,7 @@ bool HttpSession::checkLiveStreamFMP4(const function<void()> &cb){
             }
             strong_self->shutdown(SockException(Err_shutdown, "fmp4 ring buffer detached"));
         });
+        observePlayer(_live_over_websocket ? "ws-fmp4" : "http-fmp4");
         _fmp4_reader->setReadCB([weak_self](const FMP4MediaSource::RingDataType &fmp4_list) {
             auto strong_self = weak_self.lock();
             if (!strong_self) {
@@ -335,6 +339,7 @@ bool HttpSession::checkLiveStreamTS(const function<void()> &cb){
             }
             strong_self->shutdown(SockException(Err_shutdown,"ts ring buffer detached"));
         });
+        observePlayer(_live_over_websocket ? "ws-ts" : "http-ts");
         _ts_reader->setReadCB([weak_self](const TSMediaSource::RingDataType &ts_list) {
             auto strong_self = weak_self.lock();
             if (!strong_self) {
@@ -817,7 +822,22 @@ void HttpSession::onWebSocketDecodeComplete(const WebSocketHeader &header_in){
     }
 }
 
+void HttpSession::onStarted(const RtmpMediaSource::Ptr &) {
+    observePlayer(_live_over_websocket ? "ws-flv" : "http-flv");
+}
+
+void HttpSession::observePlayer(const std::string &protocol) {
+    // 异步查源成功前连接可能已关闭，不记录不存在的成功播放者。
+    if (_player_closed) { return; }
+    auto meta = SessionMeta::find(_mediaInfo);
+    if (_player_meta && _player_meta != meta) { _player_meta->playerLeft(getIdentifier()); }
+    _player_meta = meta;
+    if (meta) { meta->playerJoined(getIdentifier(), protocol); }
+}
+
 void HttpSession::onDetach() {
+    _player_closed = true;
+    if (_player_meta) { _player_meta->playerLeft(getIdentifier()); }
     shutdown(SockException(Err_shutdown,"rtmp ring buffer detached"));
 }
 

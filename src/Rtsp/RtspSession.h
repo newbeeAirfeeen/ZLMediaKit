@@ -52,6 +52,7 @@ protected:
     std::shared_ptr<void> useRequest(const RequestContext &request);
     virtual bool shouldAutoResumeSource() const { return true; }
     virtual bool isPlaybackPaused() const { return false; }
+    virtual void onPlayerAttached() {}
     virtual void handleReq_Play(const Parser &parser);
     virtual void handleReq_Pause(const Parser &parser);
     virtual void handleReq_Teardown(const Parser &parser);

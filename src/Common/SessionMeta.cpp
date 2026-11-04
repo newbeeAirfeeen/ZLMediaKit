@@ -27,6 +27,8 @@ bool SessionMeta::parseConnect(const AMFValue &params, Snapshot &out) {
         if (control.type() != AMF_OBJECT || control["version"].as_number() != 1 ||
             control["mode"].as_string() != "playback") { return false; }
         Snapshot s;
+        s.controlled = true;
+        s.mode = "playback";
         s.session_id = params["sessionId"].as_string();
         s.hook_url = params["hookUrl"].as_string();
         s.source_type = control["source_type"].as_string();
@@ -44,6 +46,25 @@ bool SessionMeta::parseConnect(const AMFValue &params, Snapshot &out) {
     } catch (const exception &) { return false; }
 }
 
+// 生命周期元信息独立于 playbackControl：直播及禁用暂停控制的回放也要上报。
+bool SessionMeta::parseLifecycle(const AMFValue &params, Snapshot &out) {
+    try {
+        const auto &lifecycle = params["streamLifecycle"];
+        if (lifecycle.type() != AMF_OBJECT || lifecycle["version"].as_number() != 1) { return false; }
+        Snapshot s;
+        s.observed = true;
+        s.session_id = params["sessionId"].as_string();
+        s.hook_url = params["hookUrl"].as_string();
+        s.task_instance = lifecycle["task_instance"].as_string();
+        s.mode = lifecycle["mode"].as_string();
+        if (s.session_id.empty() || s.hook_url.empty() || s.task_instance.empty() ||
+            (s.mode != "live" && s.mode != "playback") ||
+            !parseUint64(lifecycle["publish_epoch"].as_string(), s.epoch) || !s.epoch) { return false; }
+        out = std::move(s);
+        return true;
+    } catch (const exception &) { return false; }
+}
+
 SessionMeta::SessionMeta(const MediaInfo &stream, const Snapshot &s, const EventPoller::Ptr &owner)
     : _stream(stream), _owner(owner), _snapshot(s) {}
 SessionMeta::Ptr SessionMeta::find(const MediaInfo &stream) {
@@ -53,11 +74,15 @@ SessionMeta::Snapshot SessionMeta::snapshot() const {
     lock_guard<mutex> lock(_mutex);
     return _snapshot;
 }
-bool SessionMeta::isPaused() const { return snapshot().paused; }
+bool SessionMeta::isPaused() const { auto s = snapshot(); return s.controlled && s.paused; }
+bool SessionMeta::isControlled() const { return snapshot().controlled; }
+bool SessionMeta::isObserved() const { return snapshot().observed; }
 bool SessionMeta::bind(const Snapshot &s) {
     lock_guard<mutex> lock(_mutex);
     if (_snapshot.stopped || _snapshot.session_id != s.session_id || s.epoch <= _snapshot.epoch ||
-        s.version < _snapshot.version || _snapshot.paused) { return false; }
+        s.version < _snapshot.version || _snapshot.paused ||
+        s.controlled != _snapshot.controlled || s.observed != _snapshot.observed ||
+        s.task_instance != _snapshot.task_instance || s.mode != _snapshot.mode) { return false; }
     auto ready = _snapshot.ready;
     _snapshot = s;
     _snapshot.ready = ready;
@@ -86,19 +111,71 @@ void SessionMeta::stop() {
     _snapshot.stopped = true;
     _snapshot.ready = false;
 }
-void SessionMeta::playerJoined(const string &player) {
+void SessionMeta::playerJoined(const string &player, const string &protocol) {
     auto self = shared_from_this();
-    _owner->async([self, player]() {
-        if (self->_players.emplace(player).second) {
+    _owner->async([self, player, protocol]() {
+        if (self->_players.emplace(player, protocol).second) {
+            self->_ever_played = true;
             self->log(self->_players.size() > 1 ? "second_player_join" : "player_join", player);
+            self->notifyPlayers("player_join", player, protocol);
         }
     });
 }
 void SessionMeta::playerLeft(const string &player) {
     auto self = shared_from_this();
     _owner->async([self, player]() {
-        if (self->_players.erase(player)) { self->log("player_leave", player); }
+        auto it = self->_players.find(player);
+        if (it == self->_players.end()) { return; }
+        auto protocol = it->second;
+        self->_players.erase(it);
+        ++self->_disconnect_count;
+        if (self->_players.empty()) { ++self->_all_left_count; }
+        self->log("player_leave", player);
+        self->notifyPlayers("player_leave", player, protocol);
     });
+}
+void SessionMeta::notifyPlayers(const char *event, const string &player, const string &protocol) {
+    auto s = snapshot();
+    if (!s.observed) { return; }
+    Json::Value body;
+    body["type"] = "media_changed";
+    body["version"] = 2;
+    body["session_id"] = s.session_id;
+    body["task_instance"] = s.task_instance;
+    body["publish_epoch"] = to_string(s.epoch);
+    body["event_seq"] = to_string(++_event_seq);
+    body["event"] = event;
+    body["player_id"] = player;
+    body["protocol"] = protocol;
+    body["player_count"] = static_cast<Json::UInt64>(_players.size());
+    body["ever_played"] = _ever_played;
+    // 当前人数可能先收到 1→0→1 的最后一个快照，累计事实不能随人数重置。
+    body["disconnect_count"] = to_string(_disconnect_count);
+    body["all_left_count"] = to_string(_all_left_count);
+    InfoL << "STREAM_POLICY event=" << event << " session_id=" << s.session_id
+          << " task_instance=" << s.task_instance << " publish_epoch=" << s.epoch
+          << " event_seq=" << _event_seq << " protocol=" << protocol << " player_id=" << player
+          << " player_count=" << _players.size() << " disconnect_count=" << _disconnect_count
+          << " all_left_count=" << _all_left_count;
+    auto requester = make_shared<HttpRequester>();
+    requester->setMethod("POST");
+    requester->addHeader("Content-Type", "application/json");
+    requester->setBody(body.toStyledString());
+    auto seq = _event_seq;
+    try {
+        requester->startRequester(s.hook_url, [requester, s, seq](const SockException &ex, const Parser &response) {
+            // 只上报事实，hook 响应不在 ZLM 执行释放策略；不新增重试/持久化机制。
+            if (ex || response.Url() != "200") {
+                WarnL << "STREAM_POLICY event=hook_failed session_id=" << s.session_id
+                      << " task_instance=" << s.task_instance << " event_seq=" << seq
+                      << " error=" << ex.what() << " http_status=" << response.Url();
+            }
+        }, 10.0f);
+    } catch (const exception &ex) {
+        requester->clear();
+        WarnL << "STREAM_POLICY event=hook_failed session_id=" << s.session_id
+              << " task_instance=" << s.task_instance << " event_seq=" << seq << " error=" << ex.what();
+    }
 }
 void SessionMeta::log(const char *event, const string &player, uint64_t seq, const string &result) const {
     auto s = snapshot();
@@ -164,7 +241,8 @@ void SessionMeta::control(bool paused, const string &player, const string &proto
         {
             lock_guard<mutex> lock(self->_mutex);
             s = self->_snapshot;
-            if (s.stopped) { validation = {41001, "task_stopped"}; }
+            if (!s.controlled) { validation = {50101, "unsupported"}; }
+            else if (s.stopped) { validation = {41001, "task_stopped"}; }
             else if (!s.connected || !s.ready) { validation = {40904, "not_ready"}; }
             else if (!(paused ? s.can_pause : s.can_resume)) { validation = {50101, "unsupported"}; }
             else if (self->_next_seq == numeric_limits<uint64_t>::max()) { validation = {500, "sequence_exhausted"}; }
@@ -233,7 +311,7 @@ void SessionMeta::update(const AMFValue &message) {
             auto &s = self->_snapshot;
             uint64_t epoch, version;
             auto target = value["target_state"].asString();
-            if (s.stopped || !s.connected || value["session_id"].asString() != s.session_id ||
+            if (!s.controlled || s.stopped || !s.connected || value["session_id"].asString() != s.session_id ||
                 !parseUint64(value["publish_epoch"].asString(), epoch) || epoch != s.epoch ||
                 !parseUint64(value["state_version"].asString(), version) || version <= s.version ||
                 (target != "paused" && target != "playing")) { return; }

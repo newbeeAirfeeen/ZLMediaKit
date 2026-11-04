@@ -274,7 +274,7 @@ void RtmpSession::sendPlayResponse(const string &err, const RtmpMediaSource::Ptr
     bool auth_success = err.empty();
     bool ok = (src.operator bool() && auth_success);
     if (ok) {
-        if (!shouldAutoResumeSource()) { sendUserControl(CONTROL_STREAM_ISRECORDED, STREAM_MEDIA); }
+        if (isPlaybackStream()) { sendUserControl(CONTROL_STREAM_ISRECORDED, STREAM_MEDIA); }
         // stream begin
         sendUserControl(CONTROL_STREAM_BEGIN, STREAM_MEDIA);
     }

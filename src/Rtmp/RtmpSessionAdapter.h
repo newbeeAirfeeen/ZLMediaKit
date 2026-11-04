@@ -13,6 +13,7 @@ protected:
     bool onPublished(const RtmpMediaSourceImp::Ptr &src) override;
     bool onDataMessage(const std::string &type, AMFDecoder &dec) override;
     bool shouldAutoResumeSource() const override;
+    bool isPlaybackStream() const override;
     bool allowContinuePush() const override;
     void onPlayerAttached() override;
     void onCmd_pause(AMFDecoder &dec) override;
@@ -23,6 +24,8 @@ protected:
 private:
     bool rejectUnsupported();
     bool _controlled = false;
+    bool _player_closed = false;
+    bool _managed = false, _invalid_lifecycle = false;
     SessionMeta::Snapshot _candidate;
     SessionMeta::Ptr _player_meta;
 };
