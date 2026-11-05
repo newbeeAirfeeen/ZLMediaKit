@@ -16,6 +16,8 @@ protected:
     bool isPlaybackStream() const override;
     bool allowContinuePush() const override;
     void onPlayerAttached() override;
+    void onCmd_closeStream(AMFDecoder &dec) override;
+    void onCmd_deleteStream(AMFDecoder &dec) override;
     void onCmd_pause(AMFDecoder &dec) override;
     void onCmd_play(AMFDecoder &dec) override;
     void onCmd_play2(AMFDecoder &dec) override;
@@ -23,6 +25,7 @@ protected:
     void onCmd_playCtrl(AMFDecoder &dec) override;
 private:
     bool rejectUnsupported();
+    void closePlayerConnection(const char *command, const char *reason);
     bool _controlled = false;
     bool _player_closed = false;
     bool _managed = false, _invalid_lifecycle = false;

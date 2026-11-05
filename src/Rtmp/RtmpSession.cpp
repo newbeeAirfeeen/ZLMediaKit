@@ -529,6 +529,7 @@ void RtmpSession::onProcessCmd(AMFDecoder &dec) {
         s_cmd_functions.emplace("connect", &RtmpSession::onCmd_connect);
         s_cmd_functions.emplace("createStream", &RtmpSession::onCmd_createStream);
         s_cmd_functions.emplace("publish", &RtmpSession::onCmd_publish);
+        s_cmd_functions.emplace("closeStream", &RtmpSession::onCmd_closeStream);
         s_cmd_functions.emplace("deleteStream", &RtmpSession::onCmd_deleteStream);
         s_cmd_functions.emplace("play", &RtmpSession::onCmd_play);
         s_cmd_functions.emplace("play2", &RtmpSession::onCmd_play2);

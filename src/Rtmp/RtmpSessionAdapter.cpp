@@ -83,6 +83,26 @@ void RtmpSessionAdapter::onPlayerAttached() {
     _player_meta = meta;
     if (meta) { meta->playerJoined(getIdentifier(), "rtmp"); }
 }
+void RtmpSessionAdapter::closePlayerConnection(const char *command, const char *reason) {
+    if (_player_closed) { return; }
+    _player_closed = true;
+    auto meta = _player_meta ? _player_meta : SessionMeta::find(mediaInfo());
+    InfoL << "STREAM_POLICY event=player_close_request session_id=" << (meta ? meta->snapshot().session_id : "-")
+          << " stream=" << mediaInfo().shortUrl() << " player_id=" << getIdentifier()
+          << " protocol=rtmp command=" << command << " reason=" << reason;
+    // 只断开此播放器，不关闭媒体源。onError 上报离开，SP 按 policy 决定任务是否结束。
+    // playerLeft 自身幂等，析构时的兜底通知不会重复增加离开计数。
+    shutdown(SockException(Err_shutdown, reason));
+}
+void RtmpSessionAdapter::onCmd_closeStream(AMFDecoder &dec) {
+    if (publishSource()) { RtmpSession::onCmd_closeStream(dec); return; }
+    closePlayerConnection("closeStream", "client_close_stream");
+}
+void RtmpSessionAdapter::onCmd_deleteStream(AMFDecoder &dec) {
+    if (publishSource()) { RtmpSession::onCmd_deleteStream(dec); return; }
+    // 播放器退出不发送属于发布端的 NetStream.Unpublish.Success。
+    closePlayerConnection("deleteStream", "client_delete_stream");
+}
 void RtmpSessionAdapter::onCmd_pause(AMFDecoder &dec) {
     auto meta = _player_meta ? _player_meta : SessionMeta::find(mediaInfo());
     if (!meta || !meta->isControlled()) { RtmpSession::onCmd_pause(dec); return; }
@@ -109,10 +129,12 @@ bool RtmpSessionAdapter::rejectUnsupported() {
     return true;
 }
 void RtmpSessionAdapter::onCmd_play(AMFDecoder &dec) {
+    if (_player_closed) { return; }
     if (_player_meta && rejectUnsupported()) { return; }
     RtmpSession::onCmd_play(dec);
 }
 void RtmpSessionAdapter::onCmd_play2(AMFDecoder &dec) {
+    if (_player_closed) { return; }
     if (!rejectUnsupported()) { RtmpSession::onCmd_play2(dec); }
 }
 void RtmpSessionAdapter::onCmd_seek(AMFDecoder &dec) {

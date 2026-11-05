@@ -15,7 +15,7 @@ import tempfile
 import threading
 import time
 
-from test_playback_control import Rtmp, Rtsp, exact, free_port
+from test_playback_control import Rtmp, Rtsp, exact, free_port, expect_server_closed
 
 
 class ObservedPublisher(Rtmp):
@@ -192,10 +192,20 @@ streamNoneReaderDelayMS=100
                 second.command('play', 3, None, name)
                 second.until(b'NetStream.Play.Start')
                 state = wait_count(name, 2, int(state['event_seq']))
-                first.close()
+                first.command('closeStream', 4, None)
+                expect_server_closed(first)
                 state = wait_count(name, 1, int(state['event_seq']))
                 assert state['event'] == 'player_leave' and int(state['disconnect_count']) == 1, state
                 assert int(state['all_left_count']) == 0, state
+                first.close()
+                # 另一播放器仍能收到发布者的新媒体；ZLM 没有直接销毁源。
+                deadline = time.monotonic() + 3
+                while time.monotonic() < deadline:
+                    kind, _ = second.message()
+                    if kind in (8, 9):
+                        break
+                else:
+                    raise AssertionError('closing first player stopped other viewer media')
 
                 bad = Rtsp(rtsp_port)
                 cleanup.append(lambda s=bad.sock: close_socket(s))
@@ -241,14 +251,22 @@ streamNoneReaderDelayMS=100
                 for client, count in ((http_sock, 3), (ws, 2), (rtsp.sock, 1)):
                     close_socket(client)
                     state = wait_count(name, count, int(state['event_seq']))
-                second.close()
+                second.command('deleteStream', 6, None, 1, stream=0)
+                expect_server_closed(second)
                 state = wait_count(name, 0, int(state['event_seq']))
                 assert int(state['disconnect_count']) == 5 and int(state['all_left_count']) == 1, state
+                second.close()
                 time.sleep(.25)
                 assert latest(name)['event_seq'] == state['event_seq'], 'duplicate destructor/onError departure'
                 protocols = {x.get('protocol') for x in observations(name) if x['event'] == 'player_join'}
                 assert protocols == {'rtmp', 'rtsp', 'http-flv', 'ws-flv'}, protocols
-                print(f'{mode}: lifecycle integration passed (2->1, all-left, four protocols, failed PLAY, control off)')
+                text = (directory / 'server.log').read_text()
+                for command, reason in (('closeStream', 'client_close_stream'), ('deleteStream', 'client_delete_stream')):
+                    entries = [line for line in text.splitlines()
+                               if f'event=player_close_request session_id={name} ' in line
+                               and f'command={command} reason={reason}' in line]
+                    assert len(entries) == 1 and 'player_id=' in entries[0], entries
+                print(f'{mode}: lifecycle integration passed (server closeStream 2->1, deleteStream all-left, four protocols, failed PLAY, control off, close logs)')
             finally:
                 stop.set()
                 for close in reversed(cleanup):

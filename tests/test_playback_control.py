@@ -159,6 +159,23 @@ def free_port():
         return sock.getsockname()[1]
 
 
+def expect_server_closed(client):
+    """Drain finite in-flight media, without closing the client socket ourselves."""
+    deadline = time.monotonic() + 3
+    client.sock.settimeout(.2)
+    while time.monotonic() < deadline:
+        try:
+            data = client.sock.recv(65536)
+        except socket.timeout:
+            continue
+        except ConnectionResetError:
+            return
+        if not data:
+            return
+        assert b'NetStream.Unpublish.Success' not in data, 'player received publisher-only status'
+    raise AssertionError('server did not close player connection')
+
+
 def run(binary, directory):
     controls = []
     state = {'paused': False, 'version': 0, 'last': 0}
@@ -334,6 +351,20 @@ streamNoneReaderDelayMS=100
         player.until(b'NetStream.Pause.Notify')
         assert state['paused']
         assert sorted(int(c['request_seq']) for c in controls) == list(range(1, len(controls) + 1)), 'protocols must share sequence'
+        # 暂停中的退出只关闭播放器，不发 resume/stop，不断开发布者或其他读者。
+        for index, command in enumerate(('closeStream', 'deleteStream')):
+            count = len(controls)
+            args = (6, None, 1) if command == 'deleteStream' else (6, None)
+            player.command(command, *args, stream=0 if command == 'deleteStream' else 1)
+            expect_server_closed(player)
+            assert len(controls) == count and state['paused'], 'player close changed source state'
+            rtsp.send('GET_PARAMETER', seq + 5 + index)
+            assert rtsp.response()[0] == 200, 'player close disconnected another viewer'
+            player.close()
+            player = Rtmp(rtmp_port)
+            player.command('play', 3, None, 'replay')
+            player.until(b'NetStream.Play.Start')
+            assert state['paused'], 'player close destroyed or resumed the source'
         # 暂停断流必须即时清理，不等 15 秒 continue_push_ms。
         stop.set()
         publisher.close()
@@ -364,6 +395,19 @@ streamNoneReaderDelayMS=100
         ordinary_player.command('pause', 4, None, True, 0)
         ordinary_player.until(b'NetStream.Pause.Notify')
         assert len(controls) == count
+        # 非托管源也关闭当前播放器，发布者依然可供新播放器接入。
+        for command in ('closeStream', 'deleteStream'):
+            args = (7, None, 1) if command == 'deleteStream' else (7, None)
+            ordinary_player.command(command, *args, stream=0 if command == 'deleteStream' else 1)
+            expect_server_closed(ordinary_player)
+            ordinary_player.close()
+            ordinary_player = Rtmp(rtmp_port)
+            ordinary_player.command('play', 3, None, 'ordinary')
+            ordinary_player.until(b'NetStream.Play.Start')
+        # 发布端 deleteStream 仍结束发布，而不是被当作播放器退出。
+        ordinary.command('deleteStream', 8, None, 1, stream=0)
+        ordinary.until(b'NetStream.Unpublish.Success')
+        expect_server_closed(ordinary)
 
         # 原有 ONVIF backchannel 的 DESCRIBE/SETUP/PLAY→RECORD 不进入回放控制。
         backchannel = Rtsp(rtsp_port)
@@ -378,7 +422,7 @@ streamNoneReaderDelayMS=100
         backchannel.send('PLAY', 3)
         assert backchannel.response()[0] == 200
         assert len(controls) == count
-        print('RTMP/RTSP playback integration passed: shared sequence, reordered HTTP, initial attach, paused disconnect, ordinary stream, backchannel')
+        print('RTMP/RTSP playback integration passed: shared sequence, reordered HTTP, initial attach, player close while paused, ordinary player close, publisher delete, paused disconnect, backchannel')
     finally:
         stop.set()
         if publisher:

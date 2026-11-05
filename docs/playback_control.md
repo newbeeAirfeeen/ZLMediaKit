@@ -96,3 +96,35 @@ python3 tests/test_playback_control.py ./release/darwin/PlaybackReview/MediaServ
 ```
 
 SSL/C API 入口已通过编译；网络联调覆盖 RTMP 和 RTSP TCP，尚未与真实 streamproxy、设备 relay 或目标播放器做联调。
+
+## RTMP 播放器主动退出
+
+播放器发送 `closeStream` 或 `deleteStream` 后，`RtmpSessionAdapter` 主动关闭当前 TCP 连接，
+不向播放器发送发布端的 `NetStream.Unpublish.Success`，也不直接关闭媒体源或发送源级 stop/resume。
+直播、回放以及无 SessionMeta 的普通播放器均适用；发布端行为保持原样。
+
+托管任务通过原有 `onError` / `playerLeft` 路径上报一次离开；析构兜底不会重复计数。
+SP 按创建时的 policy 决定任务释放：`original` 保留旧回收逻辑，`any_close` 任一退出结束任务，
+`all_close` 最后一个播放器退出结束任务。ZLM 不新增 policy 配置。
+
+关闭请求的 INFO 日志可用 `STREAM_POLICY event=player_close_request` 检索：
+
+```text
+STREAM_POLICY event=player_close_request session_id=... stream=... player_id=... protocol=rtmp command=closeStream reason=client_close_stream
+STREAM_POLICY event=player_close_request session_id=... stream=... player_id=... protocol=rtmp command=deleteStream reason=client_delete_stream
+```
+
+无托管元信息时 session_id 为 `-`。该日志表示开始关闭播放器；托管任务后续查
+`STREAM_POLICY event=player_leave`，任务是否结束再查 SP 的 `event=release` 和 `event=task_stop`。
+
+本次验证：`MediaServer` 和 `test_playback_control` 构建通过，C++ 状态测试及两个 Python 集成测试通过。
+覆盖直播/回放的 2→1 与全部离开、四协议生命周期、离开幂等和关闭日志；覆盖暂停中的两种退出命令、
+其他播放器连接保留、普通播放器退出，以及发布端 deleteStream 的原行为。
+集成测试使用模拟 SP hook，不代表已完成真实 SP policy 与设备端联调。
+
+```sh
+cmake --build /tmp/zlm-stream-policy-build --target MediaServer test_playback_control -j 6
+./release/darwin/StreamPolicyReview/test_playback_control
+python3 tests/test_playback_control.py ./release/darwin/StreamPolicyReview/MediaServer
+python3 tests/test_stream_lifecycle_integration.py ./release/darwin/StreamPolicyReview/MediaServer
+```

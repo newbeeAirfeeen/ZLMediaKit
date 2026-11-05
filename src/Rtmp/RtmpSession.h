@@ -41,6 +41,9 @@ protected:
     virtual bool isPlaybackStream() const { return false; }
     virtual bool allowContinuePush() const { return true; }
     virtual void onPlayerAttached() {}
+    // Adapter 可定制播放器退出；基类保留旧的发布端行为。
+    virtual void onCmd_closeStream(AMFDecoder &dec) {}
+    virtual void onCmd_deleteStream(AMFDecoder &dec);
     const MediaInfo &mediaInfo() const { return _media_info; }
     RtmpMediaSource::Ptr playSource() const { return _play_src.lock(); }
     RtmpMediaSourceImp::Ptr publishSource() const { return _push_src; }
@@ -58,7 +61,6 @@ private:
     void onCmd_createStream(AMFDecoder &dec);
 
     void onCmd_publish(AMFDecoder &dec);
-    void onCmd_deleteStream(AMFDecoder &dec);
 
     void doPlay(AMFDecoder &dec);
     void doPlayResponse(const std::string &err,const std::function<void(bool)> &cb);
