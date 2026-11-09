@@ -336,7 +336,7 @@ streamNoneReaderDelayMS=100
         time.sleep(1)
         # 每种写法使用新连接，覆盖首次 PLAY、正常响应和真实媒体输出。
         for initial_range in (None, 'npt=now-', 'npt=0-', 'npt=0.0-', 'npt=0.000-',
-                              'npt=00.000-', 'npt=0.-', 'npt=00:00:00.000-'):
+                              'npt=00.000-', 'npt=0.-', 'npt=00:00:00.000-', 'NPT=0.000-', 'npt=0:0:0-'):
             probe = Rtsp(rtsp_port)
             with contextlib.closing(probe.sock):
                 first_seq = probe.setup()
@@ -364,7 +364,8 @@ streamNoneReaderDelayMS=100
         seq = len(tracks) + 3
         # 非零、有限范围和非法数字仍拒绝；拒绝不消耗首次接入机会。
         for rejected in ('npt=0.000001-', 'npt=0-1', 'npt=0abc-', 'npt=0..0-',
-                         'npt=-0-', 'npt=0e0-', 'npt=0.0', 'npt=00:000:00-', 'npt=0.0--'):
+                         'npt=-0-', 'npt=0e0-', 'npt=0.0', 'npt=00:000:00-', 'npt=0.0--',
+                         'npt=0:-', 'npt=0:0-', 'npt=.0-', 'npt=00:00:000-'):
             rtsp.send('PLAY', seq, Range=rejected)
             assert rtsp.response()[0] == 501, rejected
             seq += 1
@@ -436,6 +437,12 @@ streamNoneReaderDelayMS=100
         text = (directory / 'server.log').read_text()
         assert 'event=second_player_join' in text
         assert 'reason=stream_lost_while_paused' in text
+        rejected_logs = [line for line in text.splitlines() if 'event=play_rejected' in line]
+        assert any('first_play=1 range="npt=0abc-" scale="" status=501 reason=unsupported_range' in line
+                   for line in rejected_logs), rejected_logs
+        assert any('first_play=0 range="npt=0.000-" scale="" status=501 reason=unsupported_range' in line
+                   for line in rejected_logs), rejected_logs
+        assert all('player_id=' in line and 'cseq=' in line for line in rejected_logs)
         # 普通 RTMP 流继续使用原控制行为，不发送 SP control hook。
         count = len(controls)
         ordinary = Rtmp(rtmp_port)

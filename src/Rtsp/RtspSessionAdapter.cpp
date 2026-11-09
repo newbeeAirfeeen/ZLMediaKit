@@ -6,14 +6,32 @@
 #include "Rtcp/RtcpContext.h"
 #include <vector>
 #include <algorithm>
-#include <regex>
 using namespace mediakit;
 using namespace std;
 using namespace toolkit;
-// NPT 的零起点有秒和 hh:mm:ss 两种写法；完整匹配，不能用 atof 将非法值也解析成 0。
+// Jenkins 使用 GCC 4.8.5，其 std::regex 不完整；逐字符校验，避免编译成功但匹配恒失败。
+// 仅接受开放终点的零 NPT（秒或 hh:mm:ss），不用 atof，非法字符不能被当成 0。
 static bool isOpenZeroRange(const string &range) {
-    static const regex zero_range(R"(^npt=0+(:0{1,2}:0{1,2})?(\.0*)?-$)", regex::icase);
-    return regex_match(range, zero_range);
+    if (range.size() < 6 || (range[0] != 'n' && range[0] != 'N') ||
+        (range[1] != 'p' && range[1] != 'P') || (range[2] != 't' && range[2] != 'T') || range[3] != '=') {
+        return false;
+    }
+    size_t pos = 4;
+    auto zeros = [&]() {
+        const auto begin = pos;
+        while (pos < range.size() && range[pos] == '0') { ++pos; }
+        return pos - begin;
+    };
+    if (!zeros()) { return false; }
+    if (pos < range.size() && range[pos] == ':') {
+        for (int field = 0; field < 2; ++field) {
+            if (pos == range.size() || range[pos++] != ':') { return false; }
+            const auto digits = zeros();
+            if (digits < 1 || digits > 2) { return false; }
+        }
+    }
+    if (pos < range.size() && range[pos] == '.') { ++pos; zeros(); }
+    return pos + 1 == range.size() && range[pos] == '-';
 }
 
 static auto make_sdp() -> std::string {
@@ -271,6 +289,12 @@ void RtspSessionAdapter::handleReq_Play(const Parser &parser) {
         }
         // 仅首次默认起点兼容零值。后续零起点仍是 seek，不能误发 resume。
         if (!default_scale || (!range.empty() && range != "npt=now-" && !initial_zero)) {
+            // 记录实际拒绝条件，方便区分 Range 解析、后续 seek 和倍速请求；不输出带 token 的 URL。
+            InfoL << "PLAYBACK_STATE event=play_rejected session_id=" << meta->snapshot().session_id
+                  << " stream=" << _media_info.shortUrl() << " player_id=" << getIdentifier()
+                  << " protocol=rtsp cseq=" << _request_context.cseq << " first_play=" << !_play_started
+                  << " range=\"" << range << "\" scale=\"" << scale << "\" status=501 reason="
+                  << (!default_scale ? "unsupported_scale" : "unsupported_range");
             sendRtspResponse("501 Not Implemented"); return;
         }
         if (_play_started) { replayControl(false, parser); return; }

@@ -146,3 +146,25 @@ python3 tests/test_stream_lifecycle_integration.py ./release/darwin/StreamPolicy
 以及控制关闭时直播/回放的生命周期和 ONVIF backchannel 回归。
 
 本次验证：`MediaServer` / `test_playback_control` 编译、C++ 状态测试、两个 Python 集成测试均通过；尚未使用实际 VLC/ffplay 和线上 SP/relay 联调。
+
+### GCC 4.8.5 构建兼容补充
+
+`14b16e5a` 使用了 `std::regex`，Jenkins 的 CentOS 7 / GCC 4.8.5 实现不完整，
+即使编译成功，`npt=0.000-` 仍匹配失败并返回 501。本次改为逐字符完整校验，
+保持仅首次 PLAY、零起点、开放终点的兼容范围；不依赖浮点转换或正则库。
+
+已在 CentOS 7 的 GCC 4.8.5 中编译从生产代码提取的旧、新判断函数，结果：
+
+```text
+compiler=4.8.5 20150623 (Red Hat 4.8.5-44)
+old npt=0.000-=0
+new npt=0.000-=1; all parser checks passed
+```
+
+新增拒绝日志 `PLAYBACK_STATE event=play_rejected`：含 session_id、stream、player_id、
+CSeq（字段 cseq）、first_play、原 Range/Scale 值、status 和 reason。
+`first_play=0` 且零起点表示后续定位请求，不会被当成恢复；`unsupported_scale` 表示倍速不支持，
+`unsupported_range` 表示范围不支持。日志不输出带凭据的完整 URL。
+
+验证：GCC 4.8.5 解析函数用例通过；macOS Clang 完整程序构建、状态测试及两套网络集成测试通过。
+GCC 检查覆盖解析函数，不等于整套服务已在 CentOS 7 或现场播放器完成联调。
