@@ -37,7 +37,8 @@ namespace mediakit {
     private:
         void replayControl(bool paused, const Parser &parser);
         SessionMeta::Ptr _player_meta;
-        bool _replay_started = false;
+        bool _play_started = false;
+        std::string _initial_zero_range;
         bool _player_closed = false;
         bool _is_adapter_mode = false;
         std::string _session_id_saved;

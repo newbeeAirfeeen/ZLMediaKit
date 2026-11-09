@@ -210,7 +210,7 @@ streamNoneReaderDelayMS=100
                 bad = Rtsp(rtsp_port)
                 cleanup.append(lambda s=bad.sock: close_socket(s))
                 bad.url = bad.url.replace('/replay', '/' + name)
-                bad.send('PLAY', 1)
+                bad.send('PLAY', 1, Range='npt=0.000-')
                 assert bad.response()[0] >= 400
                 close_socket(bad.sock)
                 time.sleep(.1)
@@ -229,8 +229,9 @@ streamNoneReaderDelayMS=100
                     status, headers, _ = rtsp.response()
                     assert status == 200
                     rtsp.session = headers['Session'].split(';')[0]
-                rtsp.send('PLAY', len(tracks) + 2, Range='npt=0-')
+                rtsp.send('PLAY', len(tracks) + 2, Range='npt=0.000-')
                 assert rtsp.response()[0] == 200
+                rtsp.expect_rtp()
                 state = wait_count(name, 2, int(state['event_seq']))
                 http_sock = http_player(http_port, name)
                 cleanup.append(lambda s=http_sock: close_socket(s))
@@ -261,6 +262,8 @@ streamNoneReaderDelayMS=100
                 protocols = {x.get('protocol') for x in observations(name) if x['event'] == 'player_join'}
                 assert protocols == {'rtmp', 'rtsp', 'http-flv', 'ws-flv'}, protocols
                 text = (directory / 'server.log').read_text()
+                assert 'rtsp seekTo(ms):' not in text, 'initial zero Range performed a seek'
+                assert f'event=initial_play_range session_id={name} ' in text
                 for command, reason in (('closeStream', 'client_close_stream'), ('deleteStream', 'client_delete_stream')):
                     entries = [line for line in text.splitlines()
                                if f'event=player_close_request session_id={name} ' in line

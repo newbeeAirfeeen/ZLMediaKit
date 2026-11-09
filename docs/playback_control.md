@@ -128,3 +128,21 @@ cmake --build /tmp/zlm-stream-policy-build --target MediaServer test_playback_co
 python3 tests/test_playback_control.py ./release/darwin/StreamPolicyReview/MediaServer
 python3 tests/test_stream_lifecycle_integration.py ./release/darwin/StreamPolicyReview/MediaServer
 ```
+
+## 首次 RTSP PLAY 的零起点 Range
+
+首次成功接入时，默认倍速（Scale 缺省、1 或 1.0）允许 `npt=0-`、`npt=0.0-`、
+`npt=0.000-` 及合法的零值 `hh:mm:ss` 写法；必须是开放终点，完整匹配，不能把非法数字当作 0。
+直播、受控回放和普通源均走正常 PLAY 状态校验、RTP-Info 响应和 reader 接入，
+不因该默认起点调用源级 seek / resume，也不直接回复一个没有媒体接入的 200。
+对没有历史数据的直播，这是播放器兼容行为，不代表标准定义 `0 = now`。
+
+首次机会在成功接入后才消耗；失败请求后仍可正常打开。受控回放的后续零起点 PLAY
+仍返回 501，不发送 resume；恢复使用原有不带 Range 的 PLAY。新播放器首次加入已暂停任务
+也不会恢复上游。普通源后续 PLAY 保留原行为，本次不新增定位能力。无需配置变更。
+
+成功接入时 INFO 日志：`STREAM_POLICY event=initial_play_range session_id=... stream=... player_id=... protocol=rtsp range=npt=0.000- action=attach`。
+测试覆盖零值多种写法、非法/非零/有限范围、实际 RTP 输出、后续零值拒绝、暂停任务新接入，
+以及控制关闭时直播/回放的生命周期和 ONVIF backchannel 回归。
+
+本次验证：`MediaServer` / `test_playback_control` 编译、C++ 状态测试、两个 Python 集成测试均通过；尚未使用实际 VLC/ffplay 和线上 SP/relay 联调。

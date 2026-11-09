@@ -6,9 +6,16 @@
 #include "Rtcp/RtcpContext.h"
 #include <vector>
 #include <algorithm>
+#include <regex>
 using namespace mediakit;
 using namespace std;
 using namespace toolkit;
+// NPT 的零起点有秒和 hh:mm:ss 两种写法；完整匹配，不能用 atof 将非法值也解析成 0。
+static bool isOpenZeroRange(const string &range) {
+    static const regex zero_range(R"(^npt=0+(:0{1,2}:0{1,2})?(\.0*)?-$)", regex::icase);
+    return regex_match(range, zero_range);
+}
+
 static auto make_sdp() -> std::string {
     GET_CONFIG(uint32_t, pt, RtpProxy::kG711APT);
     const char* fmt = "v=0\r\n"
@@ -224,6 +231,8 @@ RtspSessionAdapter::~RtspSessionAdapter() {
 }
 bool RtspSessionAdapter::shouldAutoResumeSource() const {
     auto meta = SessionMeta::find(_media_info);
+    // 首次默认起点只接入当前媒体，直播也不对共享源触发 seek / resume。
+    if (!_initial_zero_range.empty()) { return false; }
     return _is_adapter_mode || !meta || !meta->isControlled();
 }
 bool RtspSessionAdapter::isPlaybackPaused() const {
@@ -231,36 +240,47 @@ bool RtspSessionAdapter::isPlaybackPaused() const {
 }
 void RtspSessionAdapter::onPlayerAttached() {
     if (_is_adapter_mode || _player_closed) { return; }
+    // 只有基类完成正常 PLAY / reader 接入后才消耗首次机会，失败请求不计入。
+    _play_started = true;
     auto meta = SessionMeta::find(_media_info);
     if (_player_meta && _player_meta != meta) { _player_meta->playerLeft(getIdentifier()); }
     _player_meta = meta;
     if (meta) {
-        _replay_started = meta->isControlled();
         meta->playerJoined(getIdentifier(), "rtsp");
+    }
+    if (!_initial_zero_range.empty()) {
+        InfoL << "STREAM_POLICY event=initial_play_range session_id=" << (meta ? meta->snapshot().session_id : "-")
+              << " stream=" << _media_info.shortUrl() << " player_id=" << getIdentifier()
+              << " protocol=rtsp range=" << _initial_zero_range << " action=attach";
     }
 }
 void RtspSessionAdapter::handleReq_Play(const Parser &parser) {
     auto meta = _is_adapter_mode ? nullptr : SessionMeta::find(_media_info);
-    if (!meta || !meta->isControlled()) { base_type::handleReq_Play(parser); return; }
-    if (_sessionid.empty() || parser["Session"] != _sessionid || _play_src.expired()) {
-        sendRtspResponse("454 Session Not Found"); return;
-    }
-    if (_close_after_response || none_of(_sdp_track.begin(), _sdp_track.end(),
-                                       [](const SdpTrack::Ptr &track) { return track->_inited; })) {
-        sendRtspResponse("455 Method Not Valid in This State"); return;
-    }
     auto scale = parser["Scale"];
     auto range = parser["Range"];
     trim(scale); trim(range);
-    // 初次接入允许常见的 npt=0-/now-，但不把它解释成 seek 或恢复上游。
-    if ((!scale.empty() && scale != "1" && scale != "1.0") ||
-        (!range.empty() && range != "npt=now-" && !(!_replay_started && range == "npt=0-"))) {
-        sendRtspResponse("501 Not Implemented"); return;
+    const bool default_scale = scale.empty() || scale == "1" || scale == "1.0";
+    const bool initial_zero = !_play_started && default_scale && isOpenZeroRange(range);
+    if (meta && meta->isControlled()) {
+        if (_sessionid.empty() || parser["Session"] != _sessionid || _play_src.expired()) {
+            sendRtspResponse("454 Session Not Found"); return;
+        }
+        if (_close_after_response || none_of(_sdp_track.begin(), _sdp_track.end(),
+                                           [](const SdpTrack::Ptr &track) { return track->_inited; })) {
+            sendRtspResponse("455 Method Not Valid in This State"); return;
+        }
+        // 仅首次默认起点兼容零值。后续零起点仍是 seek，不能误发 resume。
+        if (!default_scale || (!range.empty() && range != "npt=now-" && !initial_zero)) {
+            sendRtspResponse("501 Not Implemented"); return;
+        }
+        if (_play_started) { replayControl(false, parser); return; }
+        _player_meta = meta;
     }
-    if (_replay_started) { replayControl(false, parser); return; }
-    _player_meta = meta;
+    // 仍走基类完整的状态校验、200/RTP-Info 响应和 reader 接入，不直接回复假成功。
+    // 作用域结束即恢复普通源原有控制行为，包括后续 PLAY 和非默认倍速请求。
+    onceToken range_scope([&]() { _initial_zero_range = initial_zero ? range : ""; },
+                          [&]() { _initial_zero_range.clear(); });
     base_type::handleReq_Play(parser);
-
 }
 void RtspSessionAdapter::handleReq_Pause(const Parser &parser) {
     auto meta = _player_meta ? _player_meta : SessionMeta::find(_media_info);
@@ -273,7 +293,7 @@ void RtspSessionAdapter::replayControl(bool paused, const Parser &parser) {
     if (_sessionid.empty() || parser["Session"] != _sessionid) {
         sendRtspResponse("454 Session Not Found"); return;
     }
-    if (!_player_meta || !_replay_started || _play_src.expired() || _close_after_response) {
+    if (!_player_meta || !_play_started || _play_src.expired() || _close_after_response) {
         sendRtspResponse("455 Method Not Valid in This State"); return;
     }
     auto request = _request_context;

@@ -153,6 +153,33 @@ class Rtsp:
             return int(lines[0].split()[1]), headers, body
 
 
+    def setup(self):
+        self.send('DESCRIBE', 1, Accept='application/sdp')
+        status, _, sdp = self.response()
+        assert status == 200, (status, sdp)
+        tracks = [x for x in re.findall(r'a=control:([^\r\n]+)', sdp.decode()) if x != '*']
+        assert tracks, sdp
+        for index, track in enumerate(tracks):
+            self.send('SETUP', index + 2, '/' + track,
+                      Transport=f'RTP/AVP/TCP;unicast;interleaved={2*index}-{2*index+1}')
+            status, headers, _ = self.response()
+            assert status == 200, (status, headers)
+            self.session = headers['Session'].split(';')[0]
+        return len(tracks) + 2
+
+    def expect_rtp(self):
+        # 200 本身不够，必须真的接入 reader 并输出 RTP 媒体。
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            assert exact(self.sock, 1) == b'$', 'expected interleaved media'
+            header = exact(self.sock, 3)
+            packet = exact(self.sock, int.from_bytes(header[1:], 'big'))
+            if header[0] % 2 == 0:
+                assert len(packet) > 12 and packet[0] >> 6 == 2, packet
+                return
+        raise AssertionError('PLAY succeeded without RTP media')
+
+
 def free_port():
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
@@ -307,6 +334,17 @@ streamNoneReaderDelayMS=100
                 pass
         threading.Thread(target=feed, daemon=True).start()
         time.sleep(1)
+        # 每种写法使用新连接，覆盖首次 PLAY、正常响应和真实媒体输出。
+        for initial_range in (None, 'npt=now-', 'npt=0-', 'npt=0.0-', 'npt=0.000-',
+                              'npt=00.000-', 'npt=0.-', 'npt=00:00:00.000-'):
+            probe = Rtsp(rtsp_port)
+            with contextlib.closing(probe.sock):
+                first_seq = probe.setup()
+                probe.send('PLAY', first_seq, **({'Range': initial_range} if initial_range else {}))
+                status, headers, _ = probe.response()
+                assert status == 200 and 'RTP-Info' in headers, (initial_range, status, headers)
+                probe.expect_rtp()
+                assert not controls, 'initial PLAY must not control upstream'
         rtsp = Rtsp(rtsp_port)
         rtsp.send('DESCRIBE', 1, Accept='application/sdp')
         rtsp.send('OPTIONS', 2)
@@ -324,8 +362,15 @@ streamNoneReaderDelayMS=100
             assert status == 200
             rtsp.session = headers['Session'].split(';')[0]
         seq = len(tracks) + 3
-        rtsp.send('PLAY', seq, Range='npt=0-')
+        # 非零、有限范围和非法数字仍拒绝；拒绝不消耗首次接入机会。
+        for rejected in ('npt=0.000001-', 'npt=0-1', 'npt=0abc-', 'npt=0..0-',
+                         'npt=-0-', 'npt=0e0-', 'npt=0.0', 'npt=00:000:00-', 'npt=0.0--'):
+            rtsp.send('PLAY', seq, Range=rejected)
+            assert rtsp.response()[0] == 501, rejected
+            seq += 1
+        rtsp.send('PLAY', seq, Range='npt=0.000-')
         assert rtsp.response()[0] == 200
+        rtsp.expect_rtp()
         assert not controls, 'initial PLAY must not control upstream'
         rtsp.send('PAUSE', seq + 1)
         rtsp.send('PLAY', seq + 2)
@@ -339,6 +384,17 @@ streamNoneReaderDelayMS=100
         assert rtsp.response()[0] == 200
         assert state['paused']
         count = len(controls)
+        for rejected in ('npt=0-', 'npt=0.0-', 'npt=0.000-', 'npt=00:00:00.000-'):
+            rtsp.send('PLAY', seq + 5, Range=rejected)
+            assert rtsp.response()[0] == 501, 'later zero Range must not mean resume'
+            seq += 1
+        assert len(controls) == count and state['paused']
+        probe = Rtsp(rtsp_port)
+        with contextlib.closing(probe.sock):
+            first_seq = probe.setup()
+            probe.send('PLAY', first_seq, Range='npt=0.000-')
+            assert probe.response()[0] == 200
+            assert len(controls) == count and state['paused'], 'new reader resumed paused source'
         player = Rtmp(rtmp_port)
         player.command('play', 3, None, 'replay')
         player.until(b'NetStream.Play.Start')
@@ -422,7 +478,7 @@ streamNoneReaderDelayMS=100
         backchannel.send('PLAY', 3)
         assert backchannel.response()[0] == 200
         assert len(controls) == count
-        print('RTMP/RTSP playback integration passed: shared sequence, reordered HTTP, initial attach, player close while paused, ordinary player close, publisher delete, paused disconnect, backchannel')
+        print('RTMP/RTSP playback integration passed: shared sequence, reordered HTTP, initial zero Range variants and RTP, later zero rejected, initial attach, player close while paused, ordinary player close, publisher delete, paused disconnect, backchannel')
     finally:
         stop.set()
         if publisher:
