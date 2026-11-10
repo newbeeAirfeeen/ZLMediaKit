@@ -93,10 +93,9 @@ RUN cd /opt \
     && make -j8 \
     && make install
 
-RUN cd /opt \
-    && git clone --depth 1 https://github.com/xia-chu/ZLMediaKit.git \
-    && cd ZLMediaKit \
-    && git submodule update --init \
+# Build with the repository root as the Docker context.
+COPY . /opt/ZLMediaKit
+RUN cd /opt/ZLMediaKit \
     && mkdir -p build release/linux/Release/ \
     && cd build \
     && cmake -DCMAKE_BUILD_TYPE=Release .. \

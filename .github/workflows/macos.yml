@@ -10,9 +10,6 @@ jobs:
     steps:
     - uses: actions/checkout@v1
 
-    - name: 下载submodule源码
-      run: mv -f .gitmodules_github .gitmodules && git submodule sync && git submodule update --init
-
 #    - name: 安装brew
 #      run: ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 #

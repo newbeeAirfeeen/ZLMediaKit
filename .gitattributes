@@ -1,2 +1,5 @@
 *.h linguist-language=cpp
 *.c linguist-language=cpp
+
+# Preserve the vendored upstream files' original line endings.
+3rdpart/media-server/** -text
