@@ -57,9 +57,18 @@ trap 'exit 143' TERM
 unset SMB_USERNAME SMB_PASSWORD
 
 if [[ "$mode" == check ]]; then
-    smb 'ls' >/dev/null
-    echo "SMB_CHECK success: $SMB_SHARE"
-    exit 0
+    echo "SMB_CHECK start: share=$SMB_SHARE port=445"
+    # smbclient 的认证/连接错误可能写到 stdout；只在失败时输出诊断，
+    # 成功时不打印共享目录清单。保留客户端退出码，不启用含凭据的 shell trace。
+    if smb 'ls' > "$private_dir/check.log" 2>&1; then
+        echo "SMB_CHECK success: $SMB_SHARE"
+        exit 0
+    else
+        status=$?
+        echo "SMB_CHECK failed: share=$SMB_SHARE exit_code=$status" >&2
+        cat "$private_dir/check.log" >&2
+        exit "$status"
+    fi
 fi
 
 : "${RELEASE_VERSION:?未设置 RELEASE_VERSION}"
