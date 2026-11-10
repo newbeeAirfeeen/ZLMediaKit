@@ -32,7 +32,7 @@ pipeline {
                         error('包名包含非法字符，请检查 BUILD_NAME / NODE_NAME')
                     }
                     currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.RELEASE_PROJECT} ${params.TARGET_ARCH} ${env.GIT_COMMIT.take(8)}"
-                    currentBuild.description = "版本: ${env.RELEASE_VERSION} | SMB: 待归档"
+                    currentBuild.description = "版本: ${env.RELEASE_VERSION}\nSMB: 待归档"
                 }
                 withCredentials([usernamePassword(credentialsId: params.SMB_CREDENTIALS_ID,
                         usernameVariable: 'SMB_USERNAME', passwordVariable: 'SMB_PASSWORD')]) {
@@ -122,7 +122,7 @@ smbDirectory=smb:${env.SMB_SHARE}/${env.RELEASE_VERSION}
         always {
             script {
                 if (env.RELEASE_VERSION) {
-                    currentBuild.description = "版本: ${env.RELEASE_VERSION} | SMB: ${env.SMB_STATUS} | 路径: smb:${env.SMB_SHARE}/${env.RELEASE_VERSION}/${env.ARCHIVE_NAME}"
+                    currentBuild.description = "版本: ${env.RELEASE_VERSION}\nSMB: ${env.SMB_STATUS}\n路径: smb:${env.SMB_SHARE}/${env.RELEASE_VERSION}/${env.ARCHIVE_NAME}"
                 }
             }
         }
