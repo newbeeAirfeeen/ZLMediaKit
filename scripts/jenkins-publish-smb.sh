@@ -26,8 +26,9 @@ remote_temporary=".upload-${private_dir##*/}"
 remote_created=0
 smb() {
     # 一次调用只执行一条命令，避免后续命令成功掩盖前面的上传失败。
+    # Samba 的 SMB2 别名为 2.1；明确允许服务器使用的 SMB 2.0.2。
     smbclient "$SMB_SHARE" -A "$auth_file" -p 445 -m SMB3 \
-        --option='client min protocol=SMB2' -t 60 -c "$1"
+        --option='client min protocol=SMB2_02' -t 60 -c "$1"
 }
 cleanup() {
     local status=$?
@@ -57,7 +58,7 @@ trap 'exit 143' TERM
 unset SMB_USERNAME SMB_PASSWORD
 
 if [[ "$mode" == check ]]; then
-    echo "SMB_CHECK start: share=$SMB_SHARE port=445"
+    echo "SMB_CHECK start: share=$SMB_SHARE port=445 min_protocol=SMB2_02 max_protocol=SMB3"
     # smbclient 的认证/连接错误可能写到 stdout；只在失败时输出诊断，
     # 成功时不打印共享目录清单。保留客户端退出码，不启用含凭据的 shell trace。
     if smb 'ls' > "$private_dir/check.log" 2>&1; then
