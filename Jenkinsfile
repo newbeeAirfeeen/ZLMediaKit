@@ -9,13 +9,14 @@ pipeline {
         }
     }
     environment {
-        SMB_SHARE = '//172.29.10.109/zlm-wlw'
+        SMB_SHARE = '//172.29.10.109/X-Lab'
+        SMB_DIRECTORY = 'zlm-wlw'
         SMB_DOMAIN = "${params.SMB_DOMAIN}"
         RELEASE_PROJECT = 'ZLMediakit-fmp4'
     }
     parameters {
         string(name: 'SMB_CREDENTIALS_ID', defaultValue: 'smb-172-29-10-109', description: 'Jenkins 用户名/密码凭据 ID，需要对应共享的读写和重命名权限')
-        string(name: 'SMB_DOMAIN', defaultValue: '', description: 'SMB 域/工作组，可留空；用户名和密码保存在 Jenkins 凭据中')
+        string(name: 'SMB_DOMAIN', defaultValue: 'CLOSELI', description: 'SMB 认证域；该服务器使用 CLOSELI，用户名和密码保存在 Jenkins 凭据中')
         // Jenkins UI 选择目标架构：x86_64(原生) 或 arm64(qemu 模拟下原生编译)
         choice(name: 'TARGET_ARCH', choices: ['x86_64', 'arm64'], description: '构建目标架构')
     }
@@ -90,7 +91,7 @@ buildTimeUtc=${builtAt}
 buildUrl=${env.BUILD_URL}
 package=${env.ARCHIVE_NAME}
 sha256=${checksum}
-smbDirectory=smb:${env.SMB_SHARE}/${env.RELEASE_VERSION}
+smbDirectory=smb:${env.SMB_SHARE}/${env.SMB_DIRECTORY}/${env.RELEASE_VERSION}
 """
                     writeFile file: "target/${env.ARCHIVE_NAME}.version.txt", text: info, encoding: 'UTF-8'
                     echo info
@@ -122,7 +123,7 @@ smbDirectory=smb:${env.SMB_SHARE}/${env.RELEASE_VERSION}
         always {
             script {
                 if (env.RELEASE_VERSION) {
-                    currentBuild.description = "版本: ${env.RELEASE_VERSION}\nSMB: ${env.SMB_STATUS}\n路径: smb:${env.SMB_SHARE}/${env.RELEASE_VERSION}/${env.ARCHIVE_NAME}"
+                    currentBuild.description = "版本: ${env.RELEASE_VERSION}\nSMB: ${env.SMB_STATUS}\n路径: smb:${env.SMB_SHARE}/${env.SMB_DIRECTORY}/${env.RELEASE_VERSION}/${env.ARCHIVE_NAME}"
                 }
             }
         }
