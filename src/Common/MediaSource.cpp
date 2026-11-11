@@ -8,6 +8,7 @@
  * may be found in the AUTHORS file in the root of the source tree.
  */
 #include "MediaSource.h"
+#include "Relay/RelayConfig.h"
 #include "Common/Parser.h"
 #include "Common/config.h"
 #include "Network/Session.h"
@@ -446,7 +447,9 @@ static void findAsync_l(
     void *listener_tag = session.get();
     auto poller = session->getPoller();
     std::shared_ptr<atomic_flag> invoked(new atomic_flag { false });
-    auto cb_once = [cb, invoked](const MediaSource::Ptr &src) {
+    auto pending = info._schema == HLS_SCHEMA && relay::matches(info._vhost, info._app, info._streamid)
+        ? relay::holdPendingReader(info._vhost, info._app, info._streamid) : nullptr;
+    auto cb_once = [cb, invoked, pending](const MediaSource::Ptr &src) {
         if (invoked->test_and_set()) {
             // 回调已经执行过了
             return;
@@ -717,6 +720,10 @@ void MediaSourceEvent::onReaderChanged(MediaSource &sender, int size) {
                 return false;
             }
 
+            if (start_with(strong_sender->getOriginUrl(), "relay://")
+                && relay::hasPendingReader(strong_sender->getVhost(), strong_sender->getApp(), strong_sender->getId())) {
+                return true;
+            }
             if (!is_mp4_vod) {
                 // 直播时触发无人观看事件，让开发者自行选择是否关闭
                 NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastStreamNoneReader, *strong_sender);

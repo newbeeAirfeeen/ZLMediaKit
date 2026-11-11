@@ -757,7 +757,9 @@ void setupContext(AVCodecContext *_context, int bitrate) {
     _context->bit_rate = bitrate;
 }
 
-FFmpegEncoder::FFmpegEncoder(const Track::Ptr &track, int thread_num) {
+FFmpegEncoder::FFmpegEncoder(const Track::Ptr &track, int thread_num) : FFmpegEncoder(track, thread_num, 0, 0) {}
+
+FFmpegEncoder::FFmpegEncoder(const Track::Ptr &track, int thread_num, int width, int height) {
     setupFFmpeg();
     const AVCodec *codec = nullptr;
     const AVCodec *codec_default = nullptr;
@@ -827,7 +829,7 @@ FFmpegEncoder::FFmpegEncoder(const Track::Ptr &track, int thread_num) {
             // 设置后，I帧钱不会存储sps和pps, 但_context->extradata会有数据，需要手动处理
             // _context->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
             VideoTrack::Ptr video = static_pointer_cast<VideoTrack>(track);
-            ret = openVideoCodec(video->getVideoWidth(), video->getVideoHeight(), track->getBitRate(), codec);
+            ret = openVideoCodec(width ? width : video->getVideoWidth(), height ? height : video->getVideoHeight(), track->getBitRate(), codec);
         } else {
             AudioTrack::Ptr audio = static_pointer_cast<AudioTrack>(track);
             ret = openAudioCodec(audio->getAudioSampleRate(), audio->getAudioChannel(), track->getBitRate(), codec);

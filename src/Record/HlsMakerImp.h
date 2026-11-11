@@ -62,6 +62,7 @@ private:
     void clearCache(bool immediately, bool eof);
 
 private:
+    uint64_t _writer_id;
     int _buf_size;
     std::string _params;
     std::string _path_hls;

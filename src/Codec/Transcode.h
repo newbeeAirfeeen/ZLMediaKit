@@ -163,6 +163,7 @@ public:
     using onEnc = std::function<void(const Frame::Ptr &)>;
 
     FFmpegEncoder(const Track::Ptr &track, int thread_num = 2);
+    FFmpegEncoder(const Track::Ptr &track, int thread_num, int width, int height);
     ~FFmpegEncoder() override;
 
     void flush();

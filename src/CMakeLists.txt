@@ -45,7 +45,8 @@ endif()
 
 
 # 添加库
-add_library(zlmediakit STATIC ${MediaKit_SRC_LIST})
+add_library(zlmediakit STATIC ${MediaKit_SRC_LIST} Relay/relay_message.pb.cc)
+target_link_libraries(zlmediakit PRIVATE wlw_protobuf_lite)
 add_library(ZLMediaKit::MediaKit ALIAS zlmediakit)
 
 set(LINK_LIBRARIES ${MK_LINK_LIBRARIES})

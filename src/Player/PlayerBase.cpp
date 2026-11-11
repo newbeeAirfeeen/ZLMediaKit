@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include "PlayerBase.h"
+#include "Relay/RelayPlayer.h"
 #include "Rtsp/RtspPlayerImp.h"
 #include "Rtmp/RtmpPlayerImp.h"
 #include "Http/HlsPlayer.h"
@@ -33,6 +34,10 @@ PlayerBase::Ptr PlayerBase::createPlayer(const EventPoller::Ptr &poller, const s
     if (pos != string::npos) {
         //去除？后面的字符串
         url = url.substr(0, pos);
+    }
+
+    if (strcasecmp("relay", prefix.data()) == 0) {
+        return PlayerBase::Ptr(new RelayPlayer(poller), releasePlayer);
     }
 
     if (strcasecmp("rtsps", prefix.data()) == 0) {
