@@ -1,12 +1,11 @@
 # Relay 摄像头接入
 
-wlw 按现有播放地址的 vhost、app 和可选 stream 前缀识别 Relay 业务。物联网原业务继续走现有推拉流、鉴权、观看上报和回放控制。部署时将原摄像头地址所在的范围配置为 Relay，业务方继续使用原链接。
+wlw 按播放地址的 vhost 和路径前缀识别 Relay 业务。物联网原业务继续走现有推拉流、鉴权、观看上报和回放控制。部署时将原摄像头地址所在的范围配置为 Relay，业务方继续使用原链接。
 
 ```ini
 [relay]
 vhost=__defaultVhost__
-app=cameras
-streamPrefix=
+streamPrefix=/hlsapi/live/hls/;/live/1/main/h264/tcp/unicast/;/live/2/sub1/h264/tcp/unicast/
 esdAddress=esd.example.internal:80
 esdAccessKey=<部署值>
 esdSecret=<部署值>
@@ -16,7 +15,16 @@ reduceResolution=1
 transcodeHeight=720
 ```
 
-示例中的 app 应填线上已有值。如果同一 app 同时承载物联网和摄像头，可将 streamPrefix 配成已有路径前缀，例如 `devices/`。空 app 表示关闭 Relay 路由。若两种业务的 vhost、app 和流名前缀完全重叠，切换时需要在原服务入口上区分。旧 `[closeli]` 中的 ESD 和转码键作为新键缺失时的回退，包含 `esdAdder` 和 `TranscodeHeigh` 的历史拼写。
+这三个前缀在同一个 MediaServer 实例上分别接入原 HLS、RTSP 主码流和 RTSP 子码流。按 MediaServer 实际收到的路径填写。HLS 的 32 位随机 query 和 RTSP 的 auth_key 均不参与路径匹配。
+
+| streamPrefix 中的一项 | 匹配对象 | 示例 |
+| --- | --- | --- |
+| 以 `/` 开头 | 当前 vhost 下的 `/app/stream_id` | `/hlsapi/live/hls/` 仅接入 hlsapi 下的对应路径 |
+| 其他非空值 | 当前 vhost 下任意 app 的 `stream_id` | `devices/` 匹配 `devices/A`，不匹配 `archive/devices/A` |
+
+配置按半角分号切分，去掉每项两端空白并忽略空项；任一项从开头匹配即进入 Relay。目录前缀使用末尾的 `/` 区分同名开头的其他目录。空值和仅含分隔符都关闭 Relay 路由。
+
+迁移原先的配置时，如需保留原范围，将 `app=cameras` 和 `streamPrefix=devices/` 合并为 `streamPrefix=/cameras/devices/`；原来希望匹配整个 cameras app 时写 `/cameras/`。app 仍是原 URL 和管理 API 中流身份的一部分。旧 `[closeli]` 的 ESD 和转码键在对应新键缺失时回退，包含历史拼写 `esdAdder` 和 `TranscodeHeigh`。
 
 ## 从链接到媒体
 

@@ -6,7 +6,7 @@ wlw 在现有物联网直播、回放服务中增加 Relay 摄像头接入。原
 
 | 需求 | 业务合同 | 本次实现与验证 |
 | --- | --- | --- |
-| 物联网与 Relay 共存 | 原物联网地址、API 和 SP 会话行为保持兼容，新增机制按配置选用 | 精确 vhost/app 加可选 streamPrefix 识别，默认关闭。物联网生命周期与回放有独立回归 |
+| 物联网与 Relay 共存 | 原物联网地址、API 和 SP 会话行为保持兼容，新增机制按配置选用 | 匹配 vhost 和 streamPrefix 列表，可用完整路径跨 app 分流，前缀留空时关闭。物联网生命周期与回放有独立回归 |
 | 首次播放 | 播放原摄像头链接即可拉起，HLS 调用方无需增加 token 或先创建任务 | 匹配范围后进入原 HLS 访问控制及缺流等待，自动发现和拉流 |
 | 管理 API | 新名称为 addRelayProxy、delRelayProxy，原调用方可继续工作 | 两个旧 URL 保留别名。query/form/JSON 复用现有 API 框架 |
 | 发现与登录 | 业务 key 映射到设备和 relay，服务完成私有登录 | 从 ESD 取得 deviceId/token/unifiedId 和中继，使用 streamproxy 的 protobuf 消息 |

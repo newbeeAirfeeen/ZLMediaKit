@@ -21,6 +21,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from test_playback_control import Rtsp, free_port
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools' / 'relay'))
 from esd_mock import EsdMock, DEVICE_PATH, RELAY_PATH
@@ -109,6 +111,7 @@ def run(binary, transcode, directory):
     with Listener(('127.0.0.1', 0), Camera) as camera, EsdMock(relay_port=camera.server_address[1]) as esd:
         for service in (camera, esd):
             threading.Thread(target=service.serve_forever, daemon=True).start()
+        rtsp_port = free_port()
         with socket.socket() as s:
             s.bind(('127.0.0.1', 0))
             port = s.getsockname()[1]
@@ -127,7 +130,7 @@ rootPath={www}
 port=0
 sslport=0
 [rtsp]
-port=0
+port={rtsp_port}
 sslport=0
 [shell]
 port=0
@@ -148,8 +151,7 @@ segDur=1
 segNum=3
 deleteDelaySec=3
 [relay]
-app=cameras
-streamPrefix=fixture
+streamPrefix=/hlsapi/live/hls/;; /live/1/main/h264/tcp/unicast/ ;/live/2/sub1/h264/tcp/unicast/;
 esdAddress=127.0.0.1:{esd.server_port}
 esdAccessKey=fixture-access
 esdSecret=fixture-secret
@@ -179,21 +181,23 @@ transcodeHeight=48
                 except OSError:
                     time.sleep(.04)
             # MediaServer clears its dedicated HLS output root at startup.
-            (www / 'cameras').mkdir(parents=True, exist_ok=True)
-            neighbor = www / 'cameras' / 'iot-fixture-backup.m3u8'
+            (www / 'hlsapi' / 'live' / 'hls').mkdir(parents=True, exist_ok=True)
+            neighbor = www / 'hlsapi' / 'live' / 'hls' / 'iot-fixture-backup.m3u8'
             neighbor.write_bytes(b'neighboring playlist')
-            for path in ['/wlw/fixture.m3u8', '/cameras/iot-stream.m3u8']:
+            for path in ['/wlw/live/hls/fixture.m3u8', '/hlsapi/iot-stream.m3u8', '/hlsapi/live/hls-extra/fixture.m3u8',
+                         '/hlsapi/iot/live/hls/fixture.m3u8']:
                 try:
                     get(path)
                     raise AssertionError('wlw token gate changed')
                 except urllib.error.HTTPError as e:
                     assert e.code == 404
-            playlist = get('/cameras/fixture.m3u8').decode()
+            playlist_path = '/hlsapi/live/hls/fixture.m3u8'
+            playlist = get(playlist_path + '?' + 'a' * 32).decode()
             assert '#EXTM3U' in playlist, playlist
             segments = [s for s in playlist.splitlines() if s and not s.startswith('#')]
             assert segments, playlist
             segment = directory / 'fetched.ts'
-            segment.write_bytes(get(urllib.parse.urljoin('/cameras/fixture.m3u8', segments[0])))
+            segment.write_bytes(get(urllib.parse.urljoin(playlist_path, segments[0])))
             streams = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-show_streams',
                                                          '-of', 'json', str(segment)]))['streams']
             video = next(s for s in streams if s['codec_type'] == 'video')
@@ -202,9 +206,10 @@ transcodeHeight=48
                 assert any(s['codec_name'] == 'aac' and s['sample_rate'] == '8000' for s in streams), streams
             subprocess.run(['ffmpeg', '-v', 'error', '-xerror', '-i', str(segment),
                             '-map', '0:v', '-frames:v', '1', '-f', 'null', '-'], check=True)
-            args = dict(vhost='__defaultVhost__', app='cameras', stream='fixture', schema='hls')
+            args = dict(vhost='__defaultVhost__', app='hlsapi', stream='live/hls/fixture', schema='hls')
             for route in ['addRelayProxy', 'addCloseliProxy']:
-                assert api(route, **args)['data']['key'] == '__defaultVhost__/cameras/fixture'
+                assert api(route, **args)['data']['key'] == '__defaultVhost__/hlsapi/live/hls/fixture'
+            assert b'#EXTM3U' in get(playlist_path + '?' + 'b' * 32)
             assert esd.counts == {DEVICE_PATH: 1, RELAY_PATH: 1}, esd.counts
             # Interrupt the established upstream. PlayerProxy creates a fresh
             # delegate and repeats discovery instead of reusing the old token.
@@ -213,17 +218,28 @@ transcodeHeight=48
             while camera.plays < 2 and time.monotonic() < deadline:
                 time.sleep(.05)
             assert camera.plays == 2 and esd.counts[RELAY_PATH] == 2
-            assert b"#EXTM3U" in get("/cameras/fixture.m3u8")
+            assert b"#EXTM3U" in get(playlist_path + '?' + 'c' * 32)
             assert api('delRelayProxy', **args)['data']['flag'] is True
             assert api('delCloseliProxy', **args)['data']['flag'] is False
             assert api('addRelayProxy', **{**args, 'schema': 'invalid'})['code'] == -1
+            # Both RTSP URL shapes must enter the same server through DESCRIBE.
+            for stream in ('1/main/h264/tcp/unicast/av_stream/fixture',
+                           '2/sub1/h264/tcp/unicast/av_stream'):
+                rtsp = Rtsp(rtsp_port)
+                with contextlib.closing(rtsp.sock):
+                    rtsp.url = f'rtsp://127.0.0.1:{rtsp_port}/live/{stream}?auth_key=fixture&device_id=fixture-device'
+                    rtsp.send('DESCRIBE', 1, Accept='application/sdp')
+                    status, _, sdp = rtsp.response()
+                    assert status == 200 and b'm=video' in sdp, (status, sdp)
+                assert api('delRelayProxy', **{**args, 'app': 'live', 'stream': stream,
+                                                'schema': 'rtsp'})['data']['flag'] is True
             # An explicit pull without viewers must disappear after none-reader delay.
-            idle = {**args, 'stream': 'fixture-idle', 'schema': 'rtsp', 'params': 'auth_key=fixture'}
+            idle = {**args, 'stream': 'live/hls/fixture-idle', 'schema': 'rtsp', 'params': 'auth_key=fixture'}
             assert api('addRelayProxy', **idle)['code'] == 0
             deadline = time.monotonic() + 8
             seen = False
             while time.monotonic() < deadline:
-                listed = api('getMediaList', app='cameras', stream='fixture-idle').get('data') or []
+                listed = api('getMediaList', app='hlsapi', stream='live/hls/fixture-idle').get('data') or []
                 if listed:
                     seen = True
                 elif seen:
@@ -233,7 +249,7 @@ transcodeHeight=48
             assert api('delRelayProxy', **idle)['data']['flag'] is False
             # Delete during discovery, then create the same key again.
             esd.delay = .5
-            pending = {**args, 'stream': 'fixture-pending'}
+            pending = {**args, 'stream': 'live/hls/fixture-pending'}
             baseline = esd.counts[DEVICE_PATH]
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 old = executor.submit(api, 'addRelayProxy', **pending)
@@ -246,6 +262,19 @@ transcodeHeight=48
                 new = api('addRelayProxy', **pending)
                 assert new['code'] == 0 and old.result(timeout=3)['code'] == -1
                 assert api('delRelayProxy', **pending)['data']['flag'] is True
+            # Probe membership without creating an upstream. A configured list
+            # consisting only of separators must not grant the whole app.
+            def accepts(stream, **override):
+                reply = api('delRelayProxy', **{**args, 'stream': stream, **override})
+                return reply['code'] == 0
+            assert not accepts('live/hls/fixture', app='wrong-app')
+            assert not accepts('live/hls/fixture', vhost='other')
+            assert api('setServerConfig', **{'relay.streamPrefix': 'single/'})['code'] == 0
+            assert accepts('single/x') and accepts('single/x', app='other')
+            assert not accepts('nested/single/x') and not accepts('single/x', vhost='other')
+            for empty in (';', ''):
+                assert api('setServerConfig', **{'relay.streamPrefix': empty})['code'] == 0
+                assert not accepts('single/x')
             assert neighbor.read_bytes() == b'neighboring playlist'
             assert not errors, errors
         except Exception:

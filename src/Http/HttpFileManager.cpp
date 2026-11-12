@@ -383,6 +383,12 @@ static void accessFile(Session &sender, const Parser &parser, const MediaInfo &m
         return;
     }
 
+    if (is_hls) {
+        // hls，那么移除掉后缀获取真实的stream_id并且修改协议为HLS
+        const_cast<string &>(media_info._schema) = HLS_SCHEMA;
+        replace(const_cast<string &>(media_info._streamid), kHlsSuffix, "");
+    }
+
     const bool relay_hls = is_hls && relay::matches(media_info._vhost, media_info._app, media_info._streamid);
     if (is_hls && !relay_hls) {
         const auto& query = parser.Params();
@@ -393,12 +399,6 @@ static void accessFile(Session &sender, const Parser &parser, const MediaInfo &m
             sendNotFound(cb);
             return;
         }
-    }
-
-    if (is_hls) {
-        // hls，那么移除掉后缀获取真实的stream_id并且修改协议为HLS
-        const_cast<string &>(media_info._schema) = HLS_SCHEMA;
-        replace(const_cast<string &>(media_info._streamid), kHlsSuffix, "");
     }
 
     weak_ptr<Session> weakSession = sender.shared_from_this();

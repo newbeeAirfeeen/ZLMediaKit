@@ -1,6 +1,6 @@
 # Relay 软件架构
 
-同一 wlw 进程中，路由依据配置的 vhost、app 及可选流名前缀，在流尚未注册时即可判断归属。Relay 自有协议逻辑位于 src/Relay。共享转码在 src/Codec，播放发布沿用 PlayerProxy 与 MultiMediaSourceMuxer。
+同一 wlw 进程中，路由依据配置的 vhost 及完整路径或流名前缀，在流尚未注册时即可判断归属。Relay 自有协议逻辑位于 src/Relay。共享转码在 src/Codec，播放发布沿用 PlayerProxy 与 MultiMediaSourceMuxer。
 
 ```mermaid
 flowchart LR

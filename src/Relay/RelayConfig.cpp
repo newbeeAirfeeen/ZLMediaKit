@@ -19,9 +19,25 @@ std::string setting(const char *key, const char *legacy_key, const char *fallbac
 }
 
 bool matches(const std::string &vhost, const std::string &app, const std::string &stream) {
-    auto prefix = setting("streamPrefix", nullptr);
-    return !app.empty() && app == setting("app", nullptr) && vhost == setting("vhost", nullptr, "__defaultVhost__")
-        && stream.compare(0, prefix.size(), prefix) == 0;
+    if (vhost != setting("vhost", nullptr, "__defaultVhost__")) {
+        return false;
+    }
+    auto prefixes = toolkit::trim(setting("streamPrefix", nullptr));
+    if (prefixes.empty()) {
+        return false;
+    }
+    const auto path = "/" + app + "/" + stream;
+    for (auto &prefix : toolkit::split(prefixes, ";")) {
+        toolkit::trim(prefix);
+        if (prefix.empty()) {
+            continue;
+        }
+        const auto &candidate = prefix.front() == '/' ? path : stream;
+        if (candidate.compare(0, prefix.size(), prefix) == 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // The first HLS viewer waits for registration before it can own a ring reader.
