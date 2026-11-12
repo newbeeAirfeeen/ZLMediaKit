@@ -213,3 +213,5 @@ if(ENABLE_CXX_API)
   install(TARGETS zltoolkit
     DESTINATION ${INSTALL_PATH_LIB})
 endif()
+
+add_subdirectory(protobuf)

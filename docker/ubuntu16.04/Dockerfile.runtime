@@ -30,10 +30,10 @@ RUN apt-get update && \
 
 RUN mkdir -p /opt/media
 
-WORKDIR /opt/media
-RUN git clone --depth=1 https://github.com/xia-chu/ZLMediaKit && \
-    cd ZLMediaKit && git submodule update --init --recursive && \
-    mkdir -p build release/linux/Release/
+# Build with the repository root as the Docker context.
+COPY . /opt/media/ZLMediaKit
+WORKDIR /opt/media/ZLMediaKit
+RUN mkdir -p build release/linux/Release/
 
 WORKDIR /opt/media/ZLMediaKit/build
 RUN cmake -DCMAKE_BUILD_TYPE=Release .. && \

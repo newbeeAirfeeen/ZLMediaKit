@@ -18,8 +18,8 @@
 #include "Network/UdpServer.h"
 #include "Thread/WorkThreadPool.h"
 
-#include "Rtsp/RtspSession.h"
-#include "Rtmp/RtmpSession.h"
+#include "Rtsp/RtspSessionAdapter.h"
+#include "Rtmp/RtmpSessionAdapter.h"
 #include "Http/HttpSession.h"
 #include "Shell/ShellSession.h"
 using namespace std;
@@ -193,9 +193,9 @@ API_EXPORT uint16_t API_CALL mk_rtsp_server_start(uint16_t port, int ssl) {
     try {
         rtsp_server[ssl] = std::make_shared<TcpServer>();
         if(ssl){
-            rtsp_server[ssl]->start<SessionWithSSL<RtspSession> >(port);
+            rtsp_server[ssl]->start<SessionWithSSL<RtspSessionAdapter> >(port);
         }else{
-            rtsp_server[ssl]->start<RtspSession>(port);
+            rtsp_server[ssl]->start<RtspSessionAdapter>(port);
         }
         return rtsp_server[ssl]->getPort();
     } catch (std::exception &ex) {
@@ -210,9 +210,9 @@ API_EXPORT uint16_t API_CALL mk_rtmp_server_start(uint16_t port, int ssl) {
     try {
         rtmp_server[ssl] = std::make_shared<TcpServer>();
         if(ssl){
-            rtmp_server[ssl]->start<SessionWithSSL<RtmpSession> >(port);
+            rtmp_server[ssl]->start<SessionWithSSL<RtmpSessionAdapter> >(port);
         }else{
-            rtmp_server[ssl]->start<RtmpSession>(port);
+            rtmp_server[ssl]->start<RtmpSessionAdapter>(port);
         }
         return rtmp_server[ssl]->getPort();
     } catch (std::exception &ex) {

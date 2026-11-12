@@ -29,6 +29,7 @@ protected:
     void start(const toolkit::EventPoller::Ptr &poller, const RtmpMediaSource::Ptr &media, uint32_t start_pts = 0);
     virtual void onWrite(const toolkit::Buffer::Ptr &data, bool flush) = 0;
     virtual void onDetach() = 0;
+    virtual void onStarted(const RtmpMediaSource::Ptr &) {}
     virtual std::shared_ptr<FlvMuxer> getSharedPtr() = 0;
 
 private:

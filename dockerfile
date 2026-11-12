@@ -40,7 +40,6 @@ RUN apt-get update && \
 RUN mkdir -p /opt/media
 COPY . /opt/media/ZLMediaKit
 WORKDIR /opt/media/ZLMediaKit
-#RUN git submodule update --init --recursive && \
 RUN mkdir -p build release/linux/${MODEL}/
 
 WORKDIR /opt/media/ZLMediaKit/build

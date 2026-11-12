@@ -18,6 +18,7 @@
 #include "WebSocketSplitter.h"
 #include "HttpCookieManager.h"
 #include "HttpFileManager.h"
+#include "Common/SessionMeta.h"
 #include "TS/TSMediaSource.h"
 #include "FMP4/FMP4MediaSource.h"
 
@@ -50,6 +51,7 @@ protected:
     //FlvMuxer override
     void onWrite(const toolkit::Buffer::Ptr &data, bool flush) override ;
     void onDetach() override;
+    void onStarted(const RtmpMediaSource::Ptr &src) override;
     std::shared_ptr<FlvMuxer> getSharedPtr() override;
 
     //HttpRequestSplitter override
@@ -112,6 +114,7 @@ private:
     bool checkLiveStreamTS(const std::function<void()> &cb = nullptr);
     bool checkLiveStreamFMP4(const std::function<void()> &fmp4_list = nullptr);
 
+    void observePlayer(const std::string &protocol);
     bool checkWebSocket();
     bool emitHttpEvent(bool doInvoke);
     void urlDecode(Parser &parser);
@@ -124,6 +127,8 @@ private:
     void setSocketFlags();
 
 private:
+    SessionMeta::Ptr _player_meta;
+    bool _player_closed = false;
     bool _is_live_stream = false;
     bool _live_over_websocket = false;
     //消耗的总流量

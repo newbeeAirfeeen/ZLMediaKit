@@ -10,6 +10,8 @@
 
 #include "HlsMediaSource.h"
 #include "Common/config.h"
+#include "Common/SessionMeta.h"
+#include "Util/util.h"
 
 using namespace toolkit;
 
@@ -17,6 +19,7 @@ namespace mediakit {
 
 HlsCookieData::HlsCookieData(const MediaInfo &info, const std::shared_ptr<SockInfo> &sock_info) {
     _info = info;
+    _player_id = "hls:" + makeRandStr(24);
     _sock_info = sock_info;
     _added = std::make_shared<bool>(false);
     addReaderCount();
@@ -28,16 +31,23 @@ void HlsCookieData::addReaderCount() {
         if (src) {
             *_added = true;
             _ring_reader = src->getRing()->attach(EventPollerPool::Instance().getPoller());
+            auto meta = SessionMeta::find(_info);
+            if (_player_meta && _player_meta != meta) { _player_meta->playerLeft(_player_id); }
+            _player_meta = meta;
+            if (meta) { meta->playerJoined(_player_id, "hls"); }
+            auto player_id = _player_id;
             auto added = _added;
-            _ring_reader->setDetachCB([added]() {
+            _ring_reader->setDetachCB([added, meta, player_id]() {
                 // HlsMediaSource已经销毁
                 *added = false;
+                if (meta) { meta->playerLeft(player_id); }
             });
         }
     }
 }
 
 HlsCookieData::~HlsCookieData() {
+    if (_player_meta) { _player_meta->playerLeft(_player_id); }
     if (*_added) {
         uint64_t duration = (_ticker.createdTime() - _ticker.elapsedTime()) / 1000;
         WarnL << _sock_info->getIdentifier() << "(" << _sock_info->get_peer_ip() << ":" << _sock_info->get_peer_port()

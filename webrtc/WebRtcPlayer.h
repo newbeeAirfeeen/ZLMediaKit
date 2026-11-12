@@ -13,6 +13,7 @@
 
 #include "WebRtcTransport.h"
 #include "Rtsp/RtspMediaSource.h"
+#include "Common/SessionMeta.h"
 
 namespace mediakit {
 
@@ -26,6 +27,7 @@ protected:
     ///////WebRtcTransportImp override///////
     void onStartWebRTC() override;
     void onDestory() override;
+    void onShutdown(const SockException &ex) override;
     void onRtcConfigure(RtcConfigure &configure) const override;
     void onRecvRtp(MediaTrack &track, const std::string &rid, RtpPacket::Ptr rtp) override {};
 
@@ -33,6 +35,8 @@ private:
     WebRtcPlayer(const EventPoller::Ptr &poller, const RtspMediaSource::Ptr &src, const MediaInfo &info, bool perferred_tcp);
 
 private:
+    SessionMeta::Ptr _player_meta;
+    bool _player_closed = false;
     //媒体相关元数据
     MediaInfo _media_info;
     //播放的rtsp源

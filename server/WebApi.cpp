@@ -28,6 +28,7 @@
 #include "Network/TcpServer.h"
 #include "Network/UdpServer.h"
 #include "Player/PlayerProxy.h"
+#include "Relay/RelayConfig.h"
 #include "Pusher/PusherProxy.h"
 #include "Util/MD5.h"
 #include "WebApi.h"
@@ -546,6 +547,20 @@ void getStatisticJson(const function<void(Value &val)> &cb) {
 #endif
 }
 
+// Detach before the last reference can run PlayerProxy's pending callback.
+static bool removeProxy(const string &key, const weak_ptr<PlayerProxy> *owner = nullptr) {
+    PlayerProxy::Ptr detached;
+    {
+        lock_guard<recursive_mutex> lock(s_proxyMapMtx);
+        auto it = s_proxyMap.find(key);
+        if (it == s_proxyMap.end()) { return false; }
+        if (owner && (owner->owner_before(it->second) || it->second.owner_before(*owner))) { return false; }
+        detached = std::move(it->second);
+        s_proxyMap.erase(it);
+    }
+    return true;
+}
+
 void addStreamProxy(const string &vhost, const string &app, const string &stream, const string &url, int retry_count,
                     const ProtocolOption &option, int rtp_type, float timeout_sec,
                     const function<void(const SockException &ex, const string &key)> &cb) {
@@ -569,18 +584,17 @@ void addStreamProxy(const string &vhost, const string &app, const string &stream
     }
 
     //开始播放，如果播放失败或者播放中止，将会自动重试若干次，默认一直重试
-    player->setPlayCallbackOnce([cb, key](const SockException &ex) {
+    weak_ptr<PlayerProxy> owner = player;
+    player->setPlayCallbackOnce([cb, key, owner](const SockException &ex) {
         if (ex) {
-            lock_guard<recursive_mutex> lck(s_proxyMapMtx);
-            s_proxyMap.erase(key);
+            removeProxy(key, &owner);
         }
         cb(ex, key);
     });
 
     //被主动关闭拉流
-    player->setOnClose([key](const SockException &ex) {
-        lock_guard<recursive_mutex> lck(s_proxyMapMtx);
-        s_proxyMap.erase(key);
+    player->setOnClose([key, owner](const SockException &ex) {
+        removeProxy(key, &owner);
     });
     player->play(url);
 };
@@ -1037,6 +1051,42 @@ void installWebApi() {
         val["data"]["flag"] = s_proxyPusherMap.erase(allArgs["key"]) == 1;
     });
 
+    // Historic route names are wire aliases used by existing business clients.
+    auto addRelayProxy = [](API_ARGS_MAP_ASYNC) {
+        CHECK_ARGS("vhost", "app", "stream", "schema");
+        if (!relay::matches(allArgs["vhost"], allArgs["app"], allArgs["stream"])) {
+            throw InvalidArgsException("relay namespace is not configured");
+        }
+        string url;
+        try {
+            url = relay::sourceUrl(allArgs["schema"], allArgs["stream"], allArgs["params"]);
+        } catch (const std::invalid_argument &err) {
+            throw ApiRetException(err.what(), API::OtherFailed);
+        }
+        addStreamProxy(allArgs["vhost"], allArgs["app"], allArgs["stream"], url, allArgs["retry_count"],
+                       ProtocolOption(allArgs), 0, allArgs["timeout_sec"],
+                       [invoker, val, headerOut](const SockException &err, const string &key) mutable {
+                           if (err) {
+                               val["code"] = -1;
+                               val["msg"] = err.what();
+                           } else {
+                               val["data"]["key"] = key;
+                           }
+                           invoker(200, headerOut, val.toStyledString());
+                       });
+    };
+    auto delRelayProxy = [](API_ARGS_MAP) {
+        CHECK_ARGS("vhost", "app", "stream", "schema");
+        if (!relay::matches(allArgs["vhost"], allArgs["app"], allArgs["stream"])) {
+            throw InvalidArgsException("relay namespace is not configured");
+        }
+        val["data"]["flag"] = removeProxy(getProxyKey(allArgs["vhost"], allArgs["app"], allArgs["stream"]));
+    };
+    api_regist("/index/api/addRelayProxy", addRelayProxy);
+    api_regist("/index/api/delRelayProxy", delRelayProxy);
+    api_regist("/index/api/addCloseliProxy", addRelayProxy);
+    api_regist("/index/api/delCloseliProxy", delRelayProxy);
+
     //动态添加rtsp/rtmp拉流代理
     //测试url http://127.0.0.1/index/api/addStreamProxy?vhost=__defaultVhost__&app=proxy&enable_rtsp=1&enable_rtmp=1&stream=0&url=rtmp://127.0.0.1/live/obs
     api_regist("/index/api/addStreamProxy",[](API_ARGS_MAP_ASYNC){
@@ -1069,8 +1119,7 @@ void installWebApi() {
     api_regist("/index/api/delStreamProxy",[](API_ARGS_MAP){
         CHECK_SECRET();
         CHECK_ARGS("key");
-        lock_guard<recursive_mutex> lck(s_proxyMapMtx);
-        val["data"]["flag"] = s_proxyMap.erase(allArgs["key"]) == 1;
+        val["data"]["flag"] = removeProxy(allArgs["key"]);
     });
 
     static auto addFFmpegSource = [](const string &ffmpeg_cmd_key,
@@ -1801,10 +1850,12 @@ void installWebApi() {
 }
 
 void unInstallWebApi(){
+    decltype(s_proxyMap) detached;
     {
         lock_guard<recursive_mutex> lck(s_proxyMapMtx);
-        s_proxyMap.clear();
+        detached.swap(s_proxyMap);
     }
+    detached.clear();
 
     {
         lock_guard<recursive_mutex> lck(s_ffmpegMapMtx);

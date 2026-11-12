@@ -19,7 +19,9 @@
 #include "Rtsp/RtspSession.h"
 #include "Http/HttpSession.h"
 #include "WebHook.h"
+#include "Common/SessionMeta.h"
 #include "WebApi.h"
+#include "Relay/RelayConfig.h"
 
 using namespace std;
 using namespace Json;
@@ -499,6 +501,19 @@ void installWebHook(){
 
     //监听播放失败(未找到特定的流)事件
     NoticeCenter::Instance().addListener(&web_hook_tag, Broadcast::kBroadcastNotFoundStream, [](BroadcastNotFoundStreamArgs) {
+        if (relay::matches(args._vhost, args._app, args._streamid) && (args._schema == "hls" || args._schema == "rtsp")) {
+            try {
+                auto url = relay::sourceUrl(args._schema, args._streamid, args._param_strs);
+                addStreamProxy(args._vhost, args._app, args._streamid, url, -1, ProtocolOption(), 0, 0,
+                               [closePlayer](const SockException &err, const string &) {
+                                   if (err) { closePlayer(); }
+                               });
+            } catch (const std::exception &) {
+                closePlayer();
+            }
+            return;
+        }
+
         if (!origin_urls.empty()) {
             //设置了源站，那么尝试溯源
             static atomic<uint8_t> s_index { 0 };
@@ -590,6 +605,11 @@ void installWebHook(){
     });
 
     NoticeCenter::Instance().addListener(&web_hook_tag,Broadcast::kBroadcastStreamNoneReader,[](BroadcastStreamNoneReaderArgs) {
+        if (SessionMeta::find(MediaInfo(sender.getUrl()))) { return; }
+        if (relay::matches(sender.getVhost(), sender.getApp(), sender.getId()) && start_with(sender.getOriginUrl(), "relay://")) {
+            sender.close(false);
+            return;
+        }
         if (!origin_urls.empty()) {
             //边沿站无人观看时立即停止溯源
             sender.close(false);

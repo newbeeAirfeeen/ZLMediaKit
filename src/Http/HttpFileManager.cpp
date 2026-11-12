@@ -14,6 +14,7 @@
 #endif //!defined(_WIN32)
 #include <iomanip>
 #include "HttpFileManager.h"
+#include "Relay/RelayConfig.h"
 #include "Util/File.h"
 #include "HttpConst.h"
 #include "HttpSession.h"
@@ -382,7 +383,14 @@ static void accessFile(Session &sender, const Parser &parser, const MediaInfo &m
         return;
     }
 
-    if (is_hls){
+    if (is_hls) {
+        // hls，那么移除掉后缀获取真实的stream_id并且修改协议为HLS
+        const_cast<string &>(media_info._schema) = HLS_SCHEMA;
+        replace(const_cast<string &>(media_info._streamid), kHlsSuffix, "");
+    }
+
+    const bool relay_hls = is_hls && relay::matches(media_info._vhost, media_info._app, media_info._streamid);
+    if (is_hls && !relay_hls) {
         const auto& query = parser.Params();
         auto token = query.find("token=");
         if (token == std::string::npos) {
@@ -393,15 +401,9 @@ static void accessFile(Session &sender, const Parser &parser, const MediaInfo &m
         }
     }
 
-    if (is_hls) {
-        // hls，那么移除掉后缀获取真实的stream_id并且修改协议为HLS
-        const_cast<string &>(media_info._schema) = HLS_SCHEMA;
-        replace(const_cast<string &>(media_info._streamid), kHlsSuffix, "");
-    }
-
     weak_ptr<Session> weakSession = sender.shared_from_this();
     //判断是否有权限访问该文件
-    canAccessPath(sender, parser, media_info, false, [cb, file_path, parser, is_hls, media_info, weakSession](const string &err_msg, const HttpServerCookie::Ptr &cookie) {
+    canAccessPath(sender, parser, media_info, false, [cb, file_path, parser, is_hls, relay_hls, media_info, weakSession](const string &err_msg, const HttpServerCookie::Ptr &cookie) {
         auto strongSession = weakSession.lock();
         if (!strongSession) {
             // http客户端已经断开，不需要回复
@@ -456,14 +458,17 @@ static void accessFile(Session &sender, const Parser &parser, const MediaInfo &m
         auto &attach = cookie->getAttach<HttpCookieAttachment>();
         auto src = attach._hls_data->getMediaSource();
 
-        if (src && file_path.find(src->getId()) != std::string::npos) {
+        if (src && (relay_hls ? src->getId() == media_info._streamid && src->getApp() == media_info._app
+                                && src->getVhost() == media_info._vhost
+                             : file_path.find(src->getId()) != std::string::npos)) {
             // 直接从内存获取m3u8索引文件(而不是从文件系统)
             response_file(cookie, cb, file_path, parser, src->getIndexFile());
             return;
         }
 
         // InfoL << "filepath:" << file_path << "cookie file path:" << attach._path;
-        if (attach._find_src && attach._find_src_ticker.elapsedTime() < kFindSrcIntervalSecond * 1000) {
+        // A Relay reconnect may replace the source while this viewer retains its cookie.
+        if (!relay_hls && attach._find_src && attach._find_src_ticker.elapsedTime() < kFindSrcIntervalSecond * 1000) {
             // 最近已经查找过MediaSource了，为了防止频繁查找导致占用全局互斥锁的问题，我们尝试直接从磁盘返回hls索引文件
             response_file(cookie, cb, file_path, parser);
             return;

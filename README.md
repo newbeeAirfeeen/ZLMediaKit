@@ -15,6 +15,12 @@
 [![](https://github.com/ZLMediaKit/ZLMediaKit/actions/workflows/docker.yml/badge.svg)](https://hub.docker.com/r/zlmediakit/zlmediakit/tags)
 [![](https://img.shields.io/docker/pulls/zlmediakit/zlmediakit)](https://hub.docker.com/r/zlmediakit/zlmediakit/tags)
 
+## 源码依赖
+
+本分支将 ZLToolKit、jsoncpp 和 media-server 的源码作为普通目录直接纳入主仓库管理，
+无需单独初始化或访问子仓库。克隆本仓库或下载本分支的源码归档即可取得这三项依赖。
+依赖的来源、基线提交及维护方式见 [第三方源码说明](3rdpart/README.md)。
+
 ## 项目特点
 
 - 基于C++11开发，避免使用裸指针，代码稳定可靠，性能优越。

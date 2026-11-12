@@ -87,11 +87,13 @@
 It is recommended to compile on Ubuntu or MacOS，compiling on windows is cumbersome, and some features are not compiled by default.
 
 ### Before build
-- **You must use git to clone the complete code. Do not download the source code by downloading zip package. Otherwise, the sub-module code will not be downloaded by default.You can do it like this:**
+ZLToolKit, jsoncpp and media-server are included as regular directories in this branch.
+Clone this repository or download its source archive; no separate dependency repositories need to be initialized.
+See [Third-party source notes](3rdpart/README.md) for the recorded upstream revisions.
+
 ```
-git clone https://github.com/xia-chu/ZLMediaKit.git
+git clone YOUR_REPOSITORY_URL ZLMediaKit
 cd ZLMediaKit
-git submodule update --init
 ```
 
 ### Build on linux
@@ -177,7 +179,7 @@ git submodule update --init
   
 - Guidance
 ```
-1 Enter the ZLMediaKit directory and execute git submodule update -- init downloads the code for ZLToolKit
+1 Enter the ZLMediaKit directory; the dependency source directories are already included.
 2 Open the project with cmake-gui and generate the vs project file.
 3 Find the project file (ZLMediaKit.sln), double-click to open it with vs2017.
 4 Choose to compile Release version. Find the target file and run the test case.

@@ -32,5 +32,7 @@ RUN cd /opt && \
     cd /opt && rm -rf openssl-1.1.1w openssl-1.1.1w.tar.gz
 
 RUN useradd -m jenkins
+# SMB 使用 Jenkins 凭据直传，无需宿主机挂载。
+RUN yum install -y samba-client && yum clean all
 USER jenkins
 WORKDIR /home/jenkins

@@ -22,7 +22,7 @@
 #include "Poller/EventPoller.h"
 #include "Common/config.h"
 #include "Rtsp/RtspSession.h"
-#include "Rtmp/RtmpSession.h"
+#include "Rtmp/RtmpSessionAdapter.h"
 #include "Shell/ShellSession.h"
 #include "Http/WebSocketSession.h"
 #include "Rtp/RtpServer.h"
@@ -444,12 +444,12 @@ int start_main(int argc,char *argv[]) {
             //rtsp服务器，端口默认554
             if (rtspPort) { rtspSrv->start<RtspSessionAdapter>(rtspPort, host); }
             //rtsps服务器，端口默认322
-            if (rtspsPort) { rtspSSLSrv->start<RtspSessionWithSSL>(rtspsPort, host); }
+            if (rtspsPort) { rtspSSLSrv->start<RtspSessionAdapterWithSSL>(rtspsPort, host); }
 
             //rtmp服务器，端口默认1935
-            if (rtmpPort) { rtmpSrv->start<RtmpSession>(rtmpPort, host); }
+            if (rtmpPort) { rtmpSrv->start<RtmpSessionAdapter>(rtmpPort, host); }
             //rtmps服务器，端口默认19350
-            if (rtmpsPort) { rtmpsSrv->start<RtmpSessionWithSSL>(rtmpsPort, host); }
+            if (rtmpsPort) { rtmpsSrv->start<RtmpSessionAdapterWithSSL>(rtmpsPort, host); }
 
             //http服务器，端口默认80
             if (httpPort) { httpSrv->start<HttpSession>(httpPort, host); }

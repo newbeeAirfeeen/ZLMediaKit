@@ -153,8 +153,23 @@ void RtmpMediaSourceImp::addTrackCompleted()
     }
 }
 
+void RtmpMediaSourceImp::retainForReconnect(const toolkit::EventPoller::Ptr &poller, uint32_t delay_ms) {
+    auto holder = std::make_shared<ReconnectRetention>();
+    holder->source = std::static_pointer_cast<RtmpMediaSourceImp>(shared_from_this());
+    _reconnect_retention = holder;
+    poller->doDelayTask(delay_ms, [holder]() { holder->release(); return 0; });
+}
+
+void RtmpMediaSourceImp::cancelReconnectRetention() {
+    // 旧窗口仅保留 holder；重新取得源后清掉它的强引用，避免随后暂停断流还要等旧 timer。
+    if (auto holder = _reconnect_retention.lock()) { holder->release(); }
+    _reconnect_retention.reset();
+}
+
 void RtmpMediaSourceImp::resetTracks()
 {
+    _all_track_ready = false;
+    if (_session_meta) { _session_meta->setReady(false); }
     if (_muxer) {
         _muxer->resetTracks();
     }
@@ -163,6 +178,7 @@ void RtmpMediaSourceImp::resetTracks()
 void RtmpMediaSourceImp::onAllTrackReady()
 {
     _all_track_ready = true;
+    if (_session_meta) { _session_meta->setReady(true); }
 
     if (_recreate_metadata) {
         //更新metadata

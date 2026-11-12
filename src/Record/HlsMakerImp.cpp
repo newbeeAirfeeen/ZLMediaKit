@@ -20,6 +20,26 @@ using namespace std;
 using namespace toolkit;
 
 namespace mediakit {
+namespace {
+// A delayed cleanup may outlive its player and a new pull may reuse the URL.
+mutex writer_mutex;
+map<string, uint64_t> writers;
+uint64_t next_writer = 0;
+
+bool isSegmentDirectory(const string &name, const string &stream) {
+    const string prefix = stream + "_";
+    if (name.size() != prefix.size() + 10 || name.compare(0, prefix.size(), prefix) != 0) {
+        return false;
+    }
+    for (size_t i = 0; i < 10; ++i) {
+        char ch = name[prefix.size() + i];
+        if (i == 4 || i == 7) {
+            if (ch != '-') { return false; }
+        } else if (ch < '0' || ch > '9') { return false; }
+    }
+    return true;
+}
+} // namespace
 
 HlsMakerImp::HlsMakerImp(const string &m3u8_file,
                          const string &params,
@@ -41,6 +61,9 @@ HlsMakerImp::HlsMakerImp(const string &m3u8_file,
     });
 
     _info.folder = _path_prefix;
+    lock_guard<mutex> lock(writer_mutex);
+    _writer_id = ++next_writer;
+    writers[_path_hls] = _writer_id;
 }
 
 HlsMakerImp::~HlsMakerImp() {
@@ -52,9 +75,19 @@ void HlsMakerImp::clearCache() {
 }
 
 void HlsMakerImp::clearCache(bool immediately, bool eof) {
+    if (eof) {
+        lock_guard<mutex> lock(writer_mutex);
+        auto current = writers.find(_path_hls);
+        if (current == writers.end() || current->second != _writer_id) { return; }
+    }
     //录制完了
     flushLastSegment(eof);
-    if (!isLive()||isKeep()) {
+    if (!isLive() || isKeep()) {
+        if (eof) {
+            lock_guard<mutex> lock(writer_mutex);
+            auto it = writers.find(_path_hls);
+            if (it != writers.end() && it->second == _writer_id) { writers.erase(it); }
+        }
         return;
     }
 
@@ -62,28 +95,30 @@ void HlsMakerImp::clearCache(bool immediately, bool eof) {
     _file = nullptr;
     _segment_file_paths.clear();
 
-    //hls直播才删除文件
-    GET_CONFIG(uint32_t, delay, Hls::kDeleteDelaySec);
-    if (!delay || immediately) {
-        File::scanDir(_path_prefix, [this](const string &path, bool isDir) {
-            if (path.find(_stream_id) != std::string::npos) {
-                File::delete_file(path.data()); // 只删除自己流id相关的文件及文件夹，不能影响其他流
+    auto index = _path_hls;
+    auto stream = _stream_id;
+    auto parent = _path_prefix;
+    auto nested = _info.stream.rfind('/');
+    if (nested != string::npos) { parent += "/" + _info.stream.substr(0, nested); }
+    auto writer = _writer_id;
+    auto cleanup = [index, stream, parent, writer, eof]() -> uint64_t {
+        lock_guard<mutex> lock(writer_mutex);
+        auto current = writers.find(index);
+        if (current == writers.end() || current->second != writer) { return 0; }
+        if (!File::is_dir(index.c_str())) { File::delete_file(index.c_str()); }
+        File::scanDir(parent, [&](const string &path, bool directory) {
+            auto name = path.substr(path.find_last_of('/') + 1);
+            if ((!directory && name == stream + "_init.mp4") || (directory && isSegmentDirectory(name, stream))) {
+                File::delete_file(path.c_str());
             }
             return true;
         });
-    } else {
-        auto path_prefix = _path_prefix;
-        auto stream_id = _stream_id;
-        _poller->doDelayTask(delay * 1000, [path_prefix, stream_id]() {
-            File::scanDir(path_prefix, [stream_id](const string &path, bool isDir) {
-                if (path.find(stream_id) != std::string::npos) {
-                    File::delete_file(path.data()); // 只删除自己流id相关的文件及文件夹，不能影响其他流
-                }
-                return true;
-            });
-            return 0;
-        });
-    }
+        if (eof) { writers.erase(current); }
+        return 0;
+    };
+    GET_CONFIG(uint32_t, delay, Hls::kDeleteDelaySec);
+    if (!delay || immediately) { cleanup(); }
+    else { _poller->doDelayTask(delay * 1000, std::move(cleanup)); }
 }
 
 string HlsMakerImp::onOpenSegment(uint64_t index, bool init_mp4 /*= false*/, bool use_fmp4 /* = false*/) {
