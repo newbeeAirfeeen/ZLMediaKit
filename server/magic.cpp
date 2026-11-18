@@ -9,6 +9,7 @@
 #include <openssl/evp.h>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
+#include <algorithm>
 #include <regex>
 #include <cstring>
 // Base64 解码

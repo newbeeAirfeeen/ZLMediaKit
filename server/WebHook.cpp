@@ -8,6 +8,7 @@
  * may be found in the AUTHORS file in the root of the source tree.
  */
 
+#include <algorithm>
 #include <sstream>
 #include "Util/logger.h"
 #include "Util/onceToken.h"
