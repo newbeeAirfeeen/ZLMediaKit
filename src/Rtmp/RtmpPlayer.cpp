@@ -55,7 +55,7 @@ void RtmpPlayer::play(const string &url)  {
     teardown();
     string host_url = FindField(url.data(), "://", "/");
     {
-        auto pos = url.find_last_of('/');
+        auto pos = url.find_last_of('/', url.find('?'));
         if (pos != string::npos) {
             _stream_id = url.substr(pos + 1);
         }

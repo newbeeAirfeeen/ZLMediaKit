@@ -244,6 +244,10 @@ bool HttpSession::checkLiveStream(const string &schema, const string  &url_suffi
 
     //解析带上协议+参数完整的url
     _mediaInfo.parse(schema + "://" + _parser["Host"] + url);
+    if (AuthCenter::hasOriginQuery(_mediaInfo)) {
+        // Lookup uses the canonical stream id; forwarding needs the original HTTP request target.
+        _mediaInfo._full_url = schema + "://" + _parser["Host"] + _parser.FullUrl();
+    }
 
     if (_mediaInfo._app.empty() || _mediaInfo._streamid.empty()) {
         //url不合法

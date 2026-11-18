@@ -2,7 +2,6 @@
 // Created by shenhao on 2024/9/2.
 //
 #include "AuthCenter.h"
-#include "Common/OriginTicket.h"
 #include "Http/HttpRequester.h"
 #include "json/json.h"
 #include "Util/logger.h"
@@ -16,13 +15,13 @@ AuthCenter &AuthCenter::instance() {
 
 std::shared_ptr<void> AuthCenter::regist_auth(const MediaInfo &info, const std::string &url,
                                             const std::string &session_id, const SessionMeta::Ptr &meta,
-                                            const std::string &ticket) {
+                                            const std::string &from_origin) {
     auto key = generate_key(info);
     std::lock_guard<std::mutex> lck(_mtx);
     AuthEntry entry;
     entry._url = url;
     entry._session_id = session_id;
-    entry._origin_ticket = ticket;
+    entry._from_origin = from_origin;
     entry._owner = ++_next_owner;
     entry._meta = meta;
     auto owner = entry._owner;
@@ -32,23 +31,20 @@ std::shared_ptr<void> AuthCenter::regist_auth(const MediaInfo &info, const std::
         unreigst_auth(info, owner);
     });
 }
-static bool hasRoutingFields(const StrCaseMap &args) {
-    return args.count("route") && (args.count("sp") || args.count("ticket"));
-}
 bool AuthCenter::hasOriginQuery(const MediaInfo &info) {
-    return hasRoutingFields(Parser::parseArgs(info._param_strs));
+    return Parser::parseArgs(info._param_strs).count("from_origin") != 0;
 }
 bool AuthCenter::hasOriginLease(const MediaInfo &info) {
     std::lock_guard<std::mutex> lock(_mtx);
     auto it = _auth_entry_map.find(generate_key(info));
-    return it != _auth_entry_map.end() && !it->second._origin_ticket.empty();
+    return it != _auth_entry_map.end() && !it->second._from_origin.empty();
 }
 bool AuthCenter::matchesOriginViewer(const MediaInfo &info) {
     auto args = Parser::parseArgs(info._param_strs);
     std::lock_guard<std::mutex> lock(_mtx);
     auto it = _auth_entry_map.find(generate_key(info));
-    if (it == _auth_entry_map.end() || it->second._origin_ticket.empty()) return !hasRoutingFields(args);
-    return hasRoutingFields(args) && origin_ticket::equal(it->second._origin_ticket, args["ticket"]);
+    if (it == _auth_entry_map.end() || it->second._from_origin.empty()) return !args.count("from_origin");
+    return args.count("from_origin") == 1 && it->second._from_origin == args["from_origin"];
 }
 void AuthCenter::unreigst_auth(const MediaInfo &info, uint64_t owner) {
     std::lock_guard<std::mutex> lck(_mtx);

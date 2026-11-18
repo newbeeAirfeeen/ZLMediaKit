@@ -12,7 +12,7 @@
 struct AuthEntry {
     std::string _url;
     std::string _session_id;
-    std::string _origin_ticket;
+    std::string _from_origin;
     uint64_t _owner = 0;
     std::weak_ptr<mediakit::SessionMeta> _meta;
 };
@@ -24,7 +24,7 @@ public:
     // lease 由媒体源持有，覆盖断连续推窗口；旧 lease 不能删除新发布者路由。
     std::shared_ptr<void> regist_auth(const mediakit::MediaInfo &, const std::string &url,
                                     const std::string &session_id, const mediakit::SessionMeta::Ptr &meta = nullptr,
-                                    const std::string &origin_ticket = {});
+                                    const std::string &from_origin = {});
     static bool hasOriginQuery(const mediakit::MediaInfo &info);
     bool hasOriginLease(const mediakit::MediaInfo &info);
     bool matchesOriginViewer(const mediakit::MediaInfo &info);

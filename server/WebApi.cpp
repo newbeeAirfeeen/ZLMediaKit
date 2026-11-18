@@ -593,7 +593,7 @@ void addStreamProxy(const string &vhost, const string &app, const string &stream
         MediaInfo info("rtmp://" + vhost + "/" + app + "/" + stream);
         info._vhost = vhost;
         meta = make_shared<SessionMeta>(info, state, player->getPoller());
-        lease = AuthCenter::instance().regist_auth(info, state.hook_url, state.session_id, meta, origin_route["viewer_ticket"].asString());
+        lease = AuthCenter::instance().regist_auth(info, state.hook_url, state.session_id, meta, origin_route["from_origin"].asString());
         player->setOriginSession(meta);
     }
     s_proxyMap[key] = player;

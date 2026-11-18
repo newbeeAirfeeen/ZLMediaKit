@@ -20,7 +20,7 @@
 #include "Http/HttpSession.h"
 #include "WebHook.h"
 #include "Common/SessionMeta.h"
-#include "Common/OriginTicket.h"
+#include "Util/base64.h"
 #include "WebApi.h"
 #include "AuthCenter.h"
 #include "Relay/RelayConfig.h"
@@ -57,7 +57,6 @@ const string kRetry = HOOK_FIELD"retry";
 const string kRetryDelay = HOOK_FIELD"retry_delay";
 
 onceToken token([](){
-    mINI::Instance()["streamproxy.pull_enabled"] = false;
     mINI::Instance()[kEnable] = false;
     mINI::Instance()[kTimeoutSec] = 10;
     //默认hook地址设置为空，采用默认行为(例如不鉴权)
@@ -336,22 +335,30 @@ namespace API {
     const std::string kMagicKey = "api.magicKey";
 }
 #include "magic.h"
-// Only the signed route may select the origin address. Validate before both
-// cache hits and misses, including requests that share an existing MediaSource.
-static Json::Value originRoute(const MediaInfo &info, std::string &proof) {
-    GET_CONFIG(bool, enabled, "streamproxy.pull_enabled");
-    const auto secret = std::getenv("STREAMPROXY_ORIGIN_SECRET");
-    if (!enabled || !secret || !*secret) throw std::invalid_argument("origin pull disabled");
+// Decode only the routing data. Both network destinations use the same numeric SP address.
+static Json::Value originRoute(const MediaInfo &info) {
     auto args = Parser::parseArgs(info._param_strs);
-    const auto &payload = args["route"];
-    if (payload.empty() || payload.size() > 8192 ||
-        !origin_ticket::equal(args["ticket"], origin_ticket::mac(secret, "viewer", payload)))
-        throw std::invalid_argument("invalid origin ticket");
-    auto route = origin_ticket::unpack(payload);
-    if (route["app"].asString() != info._app || route["stream"].asString() != info._streamid || route["sp"].asString() != args["sp"])
-        throw std::invalid_argument("origin route mismatch");
-    route["viewer_ticket"] = args["ticket"];
-    proof = origin_ticket::mac(secret, "origin", payload);
+    auto encoded = args["from_origin"];
+    if (args.count("from_origin") != 1 || encoded.empty() || encoded.size() > 8192 ||
+        encoded.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_") != std::string::npos)
+        throw std::invalid_argument("invalid from_origin");
+    std::replace(encoded.begin(), encoded.end(), '-', '+');
+    std::replace(encoded.begin(), encoded.end(), '_', '/');
+    while (encoded.size() % 4) encoded += '=';
+    Json::Value route;
+    if (!Json::Reader().parse(decodeBase64(encoded), route) || !route.isObject() || !route["ip"].isString())
+        throw std::invalid_argument("invalid origin JSON");
+    auto ip = route["ip"].asString();
+    if (ip.find('\0') != std::string::npos || (!SockUtil::is_ipv4(ip.c_str()) && !SockUtil::is_ipv6(ip.c_str())))
+        throw std::invalid_argument("invalid origin IP");
+    if (ip.find(':') != std::string::npos) ip = "[" + ip + "]";
+    for (const char *key : {"port", "api_port"}) {
+        if (!route[key].isUInt() || !route[key].asUInt() || route[key].asUInt() > 65535)
+            throw std::invalid_argument("invalid origin port");
+    }
+    route["sp"] = ip + ":" + std::to_string(route["port"].asUInt());
+    route["hook"] = "http://" + ip + ":" + std::to_string(route["api_port"].asUInt()) + "/streamproxy/api/v1/task/stream_state";
+    route["from_origin"] = args["from_origin"];
     return route;
 }
 
@@ -406,11 +413,9 @@ void installWebHook(){
     });
 
     NoticeCenter::Instance().addListener(&web_hook_tag,Broadcast::kBroadcastMediaPlayed,[](BroadcastMediaPlayedArgs){
-        if (AuthCenter::hasOriginQuery(args) || AuthCenter::instance().hasOriginLease(args)) {
-            try {
-                std::string proof;
-                originRoute(args, proof);
-            } catch (const std::exception &err) { invoker(err.what()); return; }
+        if (AuthCenter::instance().hasOriginLease(args) && !AuthCenter::instance().matchesOriginViewer(args)) {
+            invoker("origin task mismatch");
+            return;
         }
         GET_CONFIG(string,hook_play,Hook::kOnPlay);
         if(!hook_enable || args._param_strs == hook_adminparams || hook_play.empty() || sender.get_peer_ip() == "127.0.0.1"){
@@ -532,9 +537,12 @@ void installWebHook(){
     NoticeCenter::Instance().addListener(&web_hook_tag, Broadcast::kBroadcastNotFoundStream, [](BroadcastNotFoundStreamArgs) {
         if (AuthCenter::hasOriginQuery(args)) {
             try {
-                std::string proof;
-                auto route = originRoute(args, proof);
-                const auto url = "rtmp://" + route["sp"].asString() + "/" + args._app + "/" + args._streamid + "?proof=" + proof;
+                auto route = originRoute(args);
+                // Keep the viewer's request target (including suffix and raw query) on the RTMP hop.
+                const auto scheme = args._full_url.find("://");
+                const auto path = scheme == std::string::npos ? scheme : args._full_url.find('/', scheme + 3);
+                if (path == std::string::npos) throw std::invalid_argument("missing origin play path");
+                const auto url = "rtmp://" + route["sp"].asString() + args._full_url.substr(path);
                 ProtocolOption opt;
                 opt.modify_stamp = false;
                 opt.retain_replay_start = route["retain_start"].asBool();
