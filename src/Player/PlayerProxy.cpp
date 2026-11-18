@@ -116,7 +116,7 @@ void PlayerProxy::setDirectProxy() {
     } else if (dynamic_pointer_cast<RtmpPlayer>(_delegate)) {
         if (_origin_session) dynamic_pointer_cast<RtmpPlayer>(_delegate)->setOriginSession(_origin_session);
         //rtmp拉流,rtmp强制直接代理
-        mediaSource = std::make_shared<RtmpMediaSource>(_vhost, _app, _stream_id);
+        mediaSource = std::make_shared<RtmpMediaSource>(_vhost, _app, _stream_id, RTMP_GOP_SIZE, _option.retain_replay_start);
     }
     if (mediaSource) {
         setMediaSource(mediaSource);

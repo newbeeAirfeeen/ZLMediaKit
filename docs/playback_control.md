@@ -4,7 +4,7 @@
 
 ## streamproxy 按需回源
 
-在 `config.ini` 的 `[streamproxy]` 设置 `pull_enabled=1`，与 streamproxy 使用相同的环境变量 `STREAMPROXY_ORIGIN_SECRET`。streamproxy 在 XML 中设置 ZLM 可达的 Origin 地址和端口。ZLM 收到首个播放请求后校验链接、建立一条 RTMP 回源连接，后续播放器共用当前进度。任务关闭后使用新链接。
+在 `config.ini` 的 `[streamproxy]` 设置 `pull_enabled=1`，与 streamproxy 使用相同的环境变量 `STREAMPROXY_ORIGIN_SECRET`。streamproxy 在 XML 中设置 ZLM 可达的 Origin 地址和端口。播放和回源沿用原 app 和流名，回源参数随 query 传递。ZLM 收到首个播放请求后校验链接、建立一条 RTMP 回源连接，后续播放器共用当前进度。任务关闭后使用新链接。
 
 ## Review 顺序
 

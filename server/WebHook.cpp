@@ -22,6 +22,7 @@
 #include "Common/SessionMeta.h"
 #include "Common/OriginTicket.h"
 #include "WebApi.h"
+#include "AuthCenter.h"
 #include "Relay/RelayConfig.h"
 
 using namespace std;
@@ -347,8 +348,9 @@ static Json::Value originRoute(const MediaInfo &info, std::string &proof) {
         !origin_ticket::equal(args["ticket"], origin_ticket::mac(secret, "viewer", payload)))
         throw std::invalid_argument("invalid origin ticket");
     auto route = origin_ticket::unpack(payload);
-    if (route["stream"].asString() != info._streamid || route["sp"].asString() != args["sp"])
+    if (route["app"].asString() != info._app || route["stream"].asString() != info._streamid || route["sp"].asString() != args["sp"])
         throw std::invalid_argument("origin route mismatch");
+    route["viewer_ticket"] = args["ticket"];
     proof = origin_ticket::mac(secret, "origin", payload);
     return route;
 }
@@ -359,7 +361,7 @@ void installWebHook(){
     GET_CONFIG(string, magic_key, API::kMagicKey);
 
     NoticeCenter::Instance().addListener(&web_hook_tag, Broadcast::kBroadcastMediaPublish, [](BroadcastMediaPublishArgs) {
-        if (args._app == "sp-origin") { invoker("reserved origin namespace", ProtocolOption()); return; }
+        if (AuthCenter::instance().hasOriginLease(args)) { invoker("origin stream already bound", ProtocolOption()); return; }
         // 我们检查推流url.query中是否有magic_key是破格可以推流的
         if (check_magic_key(args._full_url, magic_key)) {
             InfoL << "valid magic_key, allow publish: "
@@ -404,7 +406,7 @@ void installWebHook(){
     });
 
     NoticeCenter::Instance().addListener(&web_hook_tag,Broadcast::kBroadcastMediaPlayed,[](BroadcastMediaPlayedArgs){
-        if (args._app == "sp-origin") {
+        if (AuthCenter::hasOriginQuery(args) || AuthCenter::instance().hasOriginLease(args)) {
             try {
                 std::string proof;
                 originRoute(args, proof);
@@ -528,13 +530,14 @@ void installWebHook(){
 
     //监听播放失败(未找到特定的流)事件
     NoticeCenter::Instance().addListener(&web_hook_tag, Broadcast::kBroadcastNotFoundStream, [](BroadcastNotFoundStreamArgs) {
-        if (args._app == "sp-origin") {
+        if (AuthCenter::hasOriginQuery(args)) {
             try {
                 std::string proof;
                 auto route = originRoute(args, proof);
-                const auto url = "rtmp://" + route["sp"].asString() + "/sp-origin/" + args._streamid + "?proof=" + proof;
+                const auto url = "rtmp://" + route["sp"].asString() + "/" + args._app + "/" + args._streamid + "?proof=" + proof;
                 ProtocolOption opt;
                 opt.modify_stamp = false;
+                opt.retain_replay_start = route["retain_start"].asBool();
                 opt.use_fmp4_or_ts = route["format"].asInt();
                 opt.enable_hls = opt.enable_hls || args._schema == HLS_SCHEMA;
                 addStreamProxy(args._vhost, args._app, args._streamid, url, 0, opt, 0, 0,

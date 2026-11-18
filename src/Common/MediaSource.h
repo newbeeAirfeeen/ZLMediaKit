@@ -140,6 +140,8 @@ public:
 
     //时间戳修复这一路流标志位
     bool modify_stamp;
+    // Hold the initial GOPs until the first reader attaches to an on-demand replay.
+    bool retain_replay_start = false;
     //转协议是否开启音频
     bool enable_audio;
     //添加静音音频，在关闭音频时，此开关无效

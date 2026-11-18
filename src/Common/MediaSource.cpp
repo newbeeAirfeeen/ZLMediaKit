@@ -509,7 +509,10 @@ static void findAsync_l(
 
 void MediaSource::findAsync(
     const MediaInfo &info, const std::shared_ptr<Session> &session, const function<void(const Ptr &)> &cb) {
-    return findAsync_l(info, session, true, cb);
+    // The source may have appeared after play authorization while this viewer was waiting.
+    findAsync_l(info, session, true, [info, cb](const Ptr &src) {
+        cb(src && AuthCenter::instance().matchesOriginViewer(info) ? src : nullptr);
+    });
 }
 
 MediaSource::Ptr

@@ -49,9 +49,9 @@ public:
     RtmpMediaSource(const std::string &vhost,
                     const std::string &app,
                     const std::string &stream_id,
-                    int ring_size = RTMP_GOP_SIZE) :
+                    int ring_size = RTMP_GOP_SIZE, bool retain_replay_start = false) :
             MediaSource(RTMP_SCHEMA, vhost, app, stream_id), _ring_size(ring_size),
-            _await_first_reader(app == "sp-origin" && stream_id.compare(0, 5, "rflv_") == 0) {
+            _await_first_reader(retain_replay_start) {
     }
 
     ~RtmpMediaSource() override { flush(); }
