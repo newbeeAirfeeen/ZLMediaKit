@@ -30,6 +30,7 @@ public:
     typedef std::shared_ptr<RtmpPlayer> Ptr;
     RtmpPlayer(const toolkit::EventPoller::Ptr &poller);
     ~RtmpPlayer() override;
+    void setOriginSession(const std::shared_ptr<class SessionMeta> &meta) { _origin_session = meta; }
 
     void play(const std::string &strUrl) override;
     void pause(bool bPause) override;
@@ -81,6 +82,7 @@ private:
     std::string _stream_id;
     std::string _tc_url;
 
+    std::weak_ptr<class SessionMeta> _origin_session;
     bool _paused = false;
     bool _metadata_got = false;
     //是否为性能测试模式

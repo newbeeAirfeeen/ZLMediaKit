@@ -20,6 +20,7 @@
 #include "Http/HttpSession.h"
 #include "WebHook.h"
 #include "Common/SessionMeta.h"
+#include "Common/OriginTicket.h"
 #include "WebApi.h"
 #include "Relay/RelayConfig.h"
 
@@ -55,6 +56,7 @@ const string kRetry = HOOK_FIELD"retry";
 const string kRetryDelay = HOOK_FIELD"retry_delay";
 
 onceToken token([](){
+    mINI::Instance()["streamproxy.pull_enabled"] = false;
     mINI::Instance()[kEnable] = false;
     mINI::Instance()[kTimeoutSec] = 10;
     //默认hook地址设置为空，采用默认行为(例如不鉴权)
@@ -333,12 +335,31 @@ namespace API {
     const std::string kMagicKey = "api.magicKey";
 }
 #include "magic.h"
+// Only the signed route may select the origin address. Validate before both
+// cache hits and misses, including requests that share an existing MediaSource.
+static Json::Value originRoute(const MediaInfo &info, std::string &proof) {
+    GET_CONFIG(bool, enabled, "streamproxy.pull_enabled");
+    const auto secret = std::getenv("STREAMPROXY_ORIGIN_SECRET");
+    if (!enabled || !secret || !*secret) throw std::invalid_argument("origin pull disabled");
+    auto args = Parser::parseArgs(info._param_strs);
+    const auto &payload = args["route"];
+    if (payload.empty() || payload.size() > 8192 ||
+        !origin_ticket::equal(args["ticket"], origin_ticket::mac(secret, "viewer", payload)))
+        throw std::invalid_argument("invalid origin ticket");
+    auto route = origin_ticket::unpack(payload);
+    if (route["stream"].asString() != info._streamid || route["sp"].asString() != args["sp"])
+        throw std::invalid_argument("origin route mismatch");
+    proof = origin_ticket::mac(secret, "origin", payload);
+    return route;
+}
+
 void installWebHook(){
     GET_CONFIG(bool,hook_enable,Hook::kEnable);
     GET_CONFIG(string,hook_adminparams,Hook::kAdminParams);
     GET_CONFIG(string, magic_key, API::kMagicKey);
 
     NoticeCenter::Instance().addListener(&web_hook_tag, Broadcast::kBroadcastMediaPublish, [](BroadcastMediaPublishArgs) {
+        if (args._app == "sp-origin") { invoker("reserved origin namespace", ProtocolOption()); return; }
         // 我们检查推流url.query中是否有magic_key是破格可以推流的
         if (check_magic_key(args._full_url, magic_key)) {
             InfoL << "valid magic_key, allow publish: "
@@ -383,6 +404,12 @@ void installWebHook(){
     });
 
     NoticeCenter::Instance().addListener(&web_hook_tag,Broadcast::kBroadcastMediaPlayed,[](BroadcastMediaPlayedArgs){
+        if (args._app == "sp-origin") {
+            try {
+                std::string proof;
+                originRoute(args, proof);
+            } catch (const std::exception &err) { invoker(err.what()); return; }
+        }
         GET_CONFIG(string,hook_play,Hook::kOnPlay);
         if(!hook_enable || args._param_strs == hook_adminparams || hook_play.empty() || sender.get_peer_ip() == "127.0.0.1"){
             invoker("");
@@ -501,6 +528,20 @@ void installWebHook(){
 
     //监听播放失败(未找到特定的流)事件
     NoticeCenter::Instance().addListener(&web_hook_tag, Broadcast::kBroadcastNotFoundStream, [](BroadcastNotFoundStreamArgs) {
+        if (args._app == "sp-origin") {
+            try {
+                std::string proof;
+                auto route = originRoute(args, proof);
+                const auto url = "rtmp://" + route["sp"].asString() + "/sp-origin/" + args._streamid + "?proof=" + proof;
+                ProtocolOption opt;
+                opt.modify_stamp = false;
+                opt.use_fmp4_or_ts = route["format"].asInt();
+                opt.enable_hls = opt.enable_hls || args._schema == HLS_SCHEMA;
+                addStreamProxy(args._vhost, args._app, args._streamid, url, 0, opt, 0, 0,
+                    [closePlayer](const SockException &err, const std::string &) { if (err) closePlayer(); }, route);
+            } catch (const std::exception &) { closePlayer(); }
+            return;
+        }
         if (relay::matches(args._vhost, args._app, args._streamid) && (args._schema == "hls" || args._schema == "rtsp")) {
             try {
                 auto url = relay::sourceUrl(args._schema, args._streamid, args._param_strs);

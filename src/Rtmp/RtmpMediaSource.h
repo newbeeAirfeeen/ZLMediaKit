@@ -50,7 +50,8 @@ public:
                     const std::string &app,
                     const std::string &stream_id,
                     int ring_size = RTMP_GOP_SIZE) :
-            MediaSource(RTMP_SCHEMA, vhost, app, stream_id), _ring_size(ring_size) {
+            MediaSource(RTMP_SCHEMA, vhost, app, stream_id), _ring_size(ring_size),
+            _await_first_reader(app == "sp-origin" && stream_id.compare(0, 5, "rflv_") == 0) {
     }
 
     ~RtmpMediaSource() override { flush(); }
@@ -60,6 +61,17 @@ public:
      */
     const RingType::Ptr &getRing() const {
         return _ring;
+    }
+
+    // The first FLV reader receives the start of this task even if another
+    // IDR arrived while the RTMP and FLV handshakes were completing.
+    RingType::RingReader::Ptr attachPlayer(const toolkit::EventPoller::Ptr &poller, std::vector<RingDataType> &startup) {
+        std::lock_guard<std::recursive_mutex> lock(_mtx);
+        if (!_await_first_reader) return _ring->attach(poller);
+        if (_startup_overflow) throw std::runtime_error("first reader exceeded replay startup buffer");
+        _await_first_reader = false;
+        startup.swap(_startup);
+        return _ring->attach(poller, false);
     }
 
     void getPlayerList(const std::function<void(const std::list<std::shared_ptr<void>> &info_list)> &cb,
@@ -142,6 +154,20 @@ private:
     */
     void onFlush(std::shared_ptr<toolkit::List<RtmpPacket::Ptr> > rtmp_list, bool key_pos) override {
         //如果不存在视频，那么就没有存在GOP缓存的意义，所以is_key一直为true确保一直清空GOP缓存
+        if (_retain_start) {
+            std::lock_guard<std::recursive_mutex> lock(_mtx);
+            if (_await_first_reader && !_startup_overflow) {
+                rtmp_list->for_each([this](const RtmpPacket::Ptr &pkt) { _startup_bytes += pkt->size(); });
+                if (_startup_bytes > 16 * 1024 * 1024 || _startup.size() >= 4096) {
+                    _startup_overflow = true;
+                    _startup.clear();
+                } else {
+                    _startup.push_back(rtmp_list);
+                }
+            }
+            _ring->write(std::move(rtmp_list), _have_video ? key_pos : true);
+            return;
+        }
         _ring->write(std::move(rtmp_list), _have_video ? key_pos : true);
     }
 
@@ -149,6 +175,11 @@ private:
     bool _have_video = false;
     bool _have_audio = false;
     int _ring_size;
+    bool _await_first_reader;
+    const bool _retain_start = _await_first_reader;
+    bool _startup_overflow = false;
+    size_t _startup_bytes = 0;
+    std::vector<RingDataType> _startup;
     uint32_t _track_stamps[TrackMax] = {0};
     AMFValue _metadata;
     RingType::Ptr _ring;

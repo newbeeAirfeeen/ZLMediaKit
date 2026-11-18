@@ -2,6 +2,10 @@
 
 本分支从 `release` 的 `29e3696b` 开始实现。ZLM 接收标准 RTMP/RTSP 暂停与恢复请求，通过发布者提供的 HTTP hook 通知 streamproxy；streamproxy 负责云存/SD 卡的实际控制及任务期限。本分支不修改 streamproxy。
 
+## streamproxy 按需回源
+
+在 `config.ini` 的 `[streamproxy]` 设置 `pull_enabled=1`，与 streamproxy 使用相同的环境变量 `STREAMPROXY_ORIGIN_SECRET`。streamproxy 在 XML 中设置 ZLM 可达的 Origin 地址和端口。ZLM 收到首个播放请求后校验链接、建立一条 RTMP 回源连接，后续播放器共用当前进度。任务关闭后使用新链接。
+
 ## Review 顺序
 
 1. `src/Common/SessionMeta.h/.cpp`：两种播放协议共享的状态镜像、请求序号、HTTP 请求和响应版本校验。序号均使用十进制字符串。控制请求分配及 HTTP 完成在固定 owner poller 上处理，发布绑定/断开通过同一把锁同步。

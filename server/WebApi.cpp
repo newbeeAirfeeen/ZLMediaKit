@@ -32,6 +32,7 @@
 #include "Pusher/PusherProxy.h"
 #include "Util/MD5.h"
 #include "WebApi.h"
+#include "AuthCenter.h"
 #include "WebHook.h"
 #include "Thread/WorkThreadPool.h"
 #include "Rtp/RtpSelector.h"
@@ -563,7 +564,8 @@ static bool removeProxy(const string &key, const weak_ptr<PlayerProxy> *owner = 
 
 void addStreamProxy(const string &vhost, const string &app, const string &stream, const string &url, int retry_count,
                     const ProtocolOption &option, int rtp_type, float timeout_sec,
-                    const function<void(const SockException &ex, const string &key)> &cb) {
+                    const function<void(const SockException &ex, const string &key)> &cb,
+                    const Json::Value &origin_route) {
     auto key = getProxyKey(vhost, app, stream);
     lock_guard<recursive_mutex> lck(s_proxyMapMtx);
     if (s_proxyMap.find(key) != s_proxyMap.end()) {
@@ -572,7 +574,28 @@ void addStreamProxy(const string &vhost, const string &app, const string &stream
         return;
     }
     //添加拉流代理
-    auto player = std::make_shared<PlayerProxy>(vhost, app, stream, option, retry_count ? retry_count : -1);
+    const bool origin = origin_route.isObject();
+    auto player = std::make_shared<PlayerProxy>(vhost, app, stream, option, origin ? 0 : (retry_count ? retry_count : -1));
+    SessionMeta::Ptr meta;
+    std::shared_ptr<void> lease;
+    if (origin) {
+        SessionMeta::Snapshot state;
+        state.session_id = origin_route["session"].asString();
+        state.task_instance = stream;
+        state.source_type = origin_route["source"].asString();
+        state.mode = state.source_type == "live" ? "live" : "playback";
+        state.hook_url = origin_route["hook"].asString();
+        state.observed = true;
+        GET_CONFIG(bool, control, Playback::kControlEnable);
+        state.controlled = control && origin_route["control"].asBool();
+        state.can_pause = state.can_resume = state.controlled;
+        state.epoch = 1;
+        MediaInfo info("rtmp://" + vhost + "/" + app + "/" + stream);
+        info._vhost = vhost;
+        meta = make_shared<SessionMeta>(info, state, player->getPoller());
+        lease = AuthCenter::instance().regist_auth(info, state.hook_url, state.session_id, meta);
+        player->setOriginSession(meta);
+    }
     s_proxyMap[key] = player;
 
     //指定RTP over TCP(播放rtsp时有效)
@@ -585,7 +608,8 @@ void addStreamProxy(const string &vhost, const string &app, const string &stream
 
     //开始播放，如果播放失败或者播放中止，将会自动重试若干次，默认一直重试
     weak_ptr<PlayerProxy> owner = player;
-    player->setPlayCallbackOnce([cb, key, owner](const SockException &ex) {
+    player->setPlayCallbackOnce([cb, key, owner, meta](const SockException &ex) {
+        if (meta && !ex) meta->setReady(true);
         if (ex) {
             removeProxy(key, &owner);
         }
@@ -593,7 +617,8 @@ void addStreamProxy(const string &vhost, const string &app, const string &stream
     });
 
     //被主动关闭拉流
-    player->setOnClose([key, owner](const SockException &ex) {
+    player->setOnClose([key, owner, lease, meta](const SockException &ex) {
+        if (meta) meta->stop();
         removeProxy(key, &owner);
     });
     player->play(url);

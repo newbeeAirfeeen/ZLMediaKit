@@ -27,6 +27,7 @@ public:
                 const ProtocolOption &option, int retry_count = -1, const toolkit::EventPoller::Ptr &poller = nullptr);
 
     ~PlayerProxy() override;
+    void setOriginSession(const std::shared_ptr<class SessionMeta> &meta) { _origin_session = meta; }
 
     /**
      * 设置play结果回调，只触发一次；在play执行之前有效
@@ -65,6 +66,7 @@ private:
     void setDirectProxy();
 
 private:
+    std::shared_ptr<class SessionMeta> _origin_session;
     ProtocolOption _option;
     int _retry_count;
     std::string _vhost;

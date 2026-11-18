@@ -323,10 +323,11 @@ void RtmpSession::sendPlayResponse(const string &err, const RtmpMediaSource::Ptr
     src->getConfigFrame([&](const RtmpPacket::Ptr &pkt) { onSendMedia(pkt); });
 
     if (shouldAutoResumeSource()) { src->pause(false); }
-    _ring_reader = src->getRing()->attach(getPoller());
+    std::vector<RtmpMediaSource::RingDataType> startup;
+    _ring_reader = src->attachPlayer(getPoller(), startup);
     weak_ptr<RtmpSession> weak_self = dynamic_pointer_cast<RtmpSession>(shared_from_this());
     _ring_reader->setGetInfoCB([weak_self]() { return weak_self.lock(); });
-    _ring_reader->setReadCB([weak_self](const RtmpMediaSource::RingDataType &pkt) {
+    auto sendBatch = [weak_self](const RtmpMediaSource::RingDataType &pkt) {
         auto strong_self = weak_self.lock();
         if (!strong_self) {
             return;
@@ -340,7 +341,9 @@ void RtmpSession::sendPlayResponse(const string &err, const RtmpMediaSource::Ptr
             }
             strong_self->onSendMedia(rtmp);
         });
-    });
+    };
+    _ring_reader->setReadCB(sendBatch);
+    for (const auto &batch : startup) sendBatch(batch);
     _ring_reader->setDetachCB([weak_self]() {
         auto strong_self = weak_self.lock();
         if (!strong_self) {

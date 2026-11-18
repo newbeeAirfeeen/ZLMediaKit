@@ -45,7 +45,8 @@ void FlvMuxer::start(const EventPoller::Ptr &poller, const RtmpMediaSource::Ptr 
 
     std::weak_ptr<FlvMuxer> weak_self = getSharedPtr();
     media->pause(false);
-    _ring_reader = media->getRing()->attach(poller);
+    std::vector<RtmpMediaSource::RingDataType> startup;
+    _ring_reader = media->attachPlayer(poller, startup);
     _ring_reader->setGetInfoCB([weak_self]() { return dynamic_pointer_cast<HttpSession>(weak_self.lock()); });
     _ring_reader->setDetachCB([weak_self]() {
         auto strong_self = weak_self.lock();
@@ -57,7 +58,7 @@ void FlvMuxer::start(const EventPoller::Ptr &poller, const RtmpMediaSource::Ptr 
 
     bool check = start_pts > 0;
     onStarted(media);
-    _ring_reader->setReadCB([weak_self, start_pts, check](const RtmpMediaSource::RingDataType &pkt) mutable {
+    auto sendBatch = [weak_self, start_pts, check](const RtmpMediaSource::RingDataType &pkt) mutable {
         auto strong_self = weak_self.lock();
         if (!strong_self) {
             return;
@@ -74,7 +75,9 @@ void FlvMuxer::start(const EventPoller::Ptr &poller, const RtmpMediaSource::Ptr 
             }
             strong_self->onWriteRtmp(rtmp, ++i == size);
         });
-    });
+    };
+    for (const auto &batch : startup) sendBatch(batch);
+    _ring_reader->setReadCB(std::move(sendBatch));
 }
 
 BufferRaw::Ptr FlvMuxer::obtainBuffer() {

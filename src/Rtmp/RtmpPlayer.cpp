@@ -14,6 +14,7 @@
 #include "Util/onceToken.h"
 #include "Thread/ThreadPool.h"
 #include "Common/config.h"
+#include "Common/SessionMeta.h"
 #include "Common/Parser.h"
 
 #include "RtmpDemuxer.h"
@@ -126,6 +127,8 @@ void RtmpPlayer::onPlayResult_l(const SockException &ex, bool handshake_done) {
             if (!strong_self) {
                 return false;
             }
+            auto origin = strong_self->_origin_session.lock();
+            if (origin && origin->isPaused()) strong_self->_rtmp_recv_ticker.resetTime();
             if (strong_self->_rtmp_recv_ticker.elapsedTime() > timeout_ms) {
                 //接收rtmp媒体数据超时
                 SockException ex(Err_timeout, "receive rtmp timeout");
@@ -361,6 +364,10 @@ void RtmpPlayer::onRtmpChunk(RtmpPacket::Ptr packet) {
         case MSG_DATA3: {
             AMFDecoder dec(chunk_data.buffer, 0, (chunk_data.type_id == MSG_DATA3 || chunk_data.type_id == MSG_CMD3) ? 3 : 0);
             std::string type = dec.load<std::string>();
+            if (type == "onPlaybackState") {
+                if (auto origin = _origin_session.lock()) origin->update(dec.load<AMFValue>());
+                break;
+            }
             auto it = s_func_map.find(type);
             if (it != s_func_map.end()) {
                 auto fun = it->second;
