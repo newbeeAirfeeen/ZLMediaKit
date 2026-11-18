@@ -68,7 +68,11 @@ public:
             onWriteSegment((char *) _init_segment.data(), _init_segment.length());
         }
     }
-    void resetTracks() { MP4MuxerMemory::resetTracks(); }
+    void resetTracks() {
+        MP4MuxerMemory::resetTracks();
+        use_fmp4 = false;
+    }
+    bool usesFmp4() const { return use_fmp4; }
     void set_use_fmp4(bool use) {
         use_fmp4 = use;
     }

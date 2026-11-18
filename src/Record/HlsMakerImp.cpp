@@ -156,7 +156,7 @@ string HlsMakerImp::onOpenSegment(uint64_t index, bool init_mp4 /*= false*/, boo
 
 bool HlsMakerImp::fileExist(const std::string &file_name)
 {
-    std::string file_name_full = _path_prefix + "/" + file_name;
+    std::string file_name_full = _path_prefix + "/" + file_name.substr(0, file_name.find('?'));
     return File::fileExist(file_name_full.c_str());
 }
 

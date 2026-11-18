@@ -138,6 +138,12 @@ void HlsMaker::addNewSegment(uint64_t stamp, bool use_fmp4 /*=false*/) {
 
     // 关闭并保存上一个切片，如果_seg_number==0,那么是点播。
     flushLastSegment(false);
+    if (use_fmp4 && (_init_file_name.empty() || !fileExist(_init_file_name))) {
+        _init_file_name = onOpenSegment(0, true, true);
+        if (!_init_segment.empty() && !_init_file_name.empty()) {
+            onWriteSegment(_init_segment.data(), _init_segment.size());
+        }
+    }
     // 新增切片
     _last_file_name = onOpenSegment(_file_index++, false, use_fmp4);
     // 记录本次切片的起始时间戳
@@ -156,17 +162,8 @@ void HlsMaker::onSegmentData(std::string string, uint64_t stamp, bool key_frame)
         //  _last_seg_timestamp = _last_timestamp = stamp;
     }
 
-    if (key_frame) {
-        // 如果清空了init.mp4,或者init文件不存在,则重新生成
-        if (_init_file_name.empty() || (!_init_file_name.empty() && !fileExist(_init_file_name))) {
-            _init_file_name = onOpenSegment(0, true, true);
-            if (!_init_segment.empty() && !_init_file_name.empty()) {
-                onWriteSegment((char *)_init_segment.data(), _init_segment.length());
-            }
-        }
-        TraceL << "[" << this << "]"
-               << ": stamp=" << stamp << ", key=" << key_frame;
-        // 尝试切片ts
+    // With no video track, any audio fragment can start the next segment.
+    if (key_frame || !haveVideo()) {
         addNewSegment(stamp, true);
     }
     if (!_last_file_name.empty()) {

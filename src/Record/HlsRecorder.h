@@ -64,7 +64,7 @@ public:
             _hls->getMediaSource()->setIndexFile("");
         }
         if (_enabled || !_option.hls_demand) {
-            if (!_use_fmp4) {
+            if (!_hls->usesFmp4()) {
                 return MpegMuxer::inputFrame(frame); // ts
             } else {
                 return _hls->inputFrame(frame); // fmp4
@@ -81,23 +81,10 @@ public:
     bool addTrack(const Track::Ptr & track) override
     {
         _hls->addTrack(track);
-        if (track->getTrackType() == TrackVideo) {
-            // 默认情况下265使用fmp4
-            if (track->getCodecId() == CodecH265) {
-                _use_fmp4 = true;
-            }
-            // 再通过强制选项覆盖
-            switch (_option.use_fmp4_or_ts){
-                case 1:
-                    _use_fmp4 = true;
-                    break;
-                case 2:
-                    _use_fmp4 = false;
-                    break;
-                default:
-                    break;
-            }
-            _hls->set_use_fmp4(_use_fmp4);
+        switch (_option.use_fmp4_or_ts) {
+            case 1: _hls->set_use_fmp4(true); break;
+            case 2: _hls->set_use_fmp4(false); break;
+            default: break; // HlsMaker selects fMP4 for H.265.
         }
         MpegMuxer::addTrack(track);
         return true;
@@ -127,7 +114,6 @@ private:
     bool _clear_cache = false;
     ProtocolOption _option;
     std::shared_ptr<HlsMakerImp> _hls;
-    bool _use_fmp4 = false;
 };
 }//namespace mediakit
 #endif //HLSRECORDER_H
