@@ -297,6 +297,13 @@ void RtmpPlayer::onCmd_onStatus(AMFDecoder &dec) {
         throw std::runtime_error("onStatus:the result object was not found");
     }
 
+    if (!_origin_session.expired() && val["code"].type() == AMF_STRING && val["code"].as_string() == "NetStream.Play.Start") {
+        const auto &format = val["useFmp4OrTs"];
+        if (format.type() == AMF_NUMBER || format.type() == AMF_INTEGER) {
+            const auto value = format.as_number();
+            if (value == 1 || value == 2) _origin_hls_format = static_cast<int>(value);
+        }
+    }
     if (_deque_on_status.size()) {
         _deque_on_status.front()(val);
         _deque_on_status.pop_front();

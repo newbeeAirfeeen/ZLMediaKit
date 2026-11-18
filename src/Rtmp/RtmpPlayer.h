@@ -30,6 +30,7 @@ public:
     typedef std::shared_ptr<RtmpPlayer> Ptr;
     RtmpPlayer(const toolkit::EventPoller::Ptr &poller);
     ~RtmpPlayer() override;
+    int originHlsFormat() const { return _origin_hls_format; }
     void setOriginSession(const std::shared_ptr<class SessionMeta> &meta) { _origin_session = meta; }
 
     void play(const std::string &strUrl) override;
@@ -84,6 +85,7 @@ private:
 
     std::weak_ptr<class SessionMeta> _origin_session;
     bool _paused = false;
+    int _origin_hls_format = 0;
     bool _metadata_got = false;
     //是否为性能测试模式
     bool _benchmark_mode = false;

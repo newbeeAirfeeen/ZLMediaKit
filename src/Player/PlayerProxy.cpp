@@ -191,6 +191,13 @@ float PlayerProxy::getLossRate(MediaSource &sender, TrackType type) {
 
 void PlayerProxy::onPlaySuccess() {
     GET_CONFIG(bool, reset_when_replay, General::kResetWhenRePlay);
+    // StreamProxy can determine the source codec only after the first pull.
+    // Older origins send no format in Play.Start and keep the route's option.
+    auto origin = _origin_session ? dynamic_pointer_cast<RtmpPlayer>(_delegate) : nullptr;
+    if (origin && origin->originHlsFormat() && _option.use_fmp4_or_ts != origin->originHlsFormat()) {
+        _option.use_fmp4_or_ts = origin->originHlsFormat();
+        _muxer.reset();
+    }
     if (dynamic_pointer_cast<RtspMediaSource>(_media_src)) {
         //rtsp拉流代理
         if (reset_when_replay || !_muxer) {
