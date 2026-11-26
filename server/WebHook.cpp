@@ -357,6 +357,12 @@ static Json::Value originRoute(const MediaInfo &info) {
         if (!route[key].isUInt() || !route[key].asUInt() || route[key].asUInt() > 65535)
             throw std::invalid_argument("invalid origin port");
     }
+    if (route.isMember("receive_timeout_ms")) {
+        const auto &timeout = route["receive_timeout_ms"];
+        if (!(timeout.type() == Json::intValue || timeout.type() == Json::uintValue) ||
+            !timeout.isUInt() || !timeout.asUInt())
+            throw std::invalid_argument("invalid origin receive_timeout_ms");
+    }
     route["sp"] = ip + ":" + std::to_string(route["port"].asUInt());
     route["hook"] = "http://" + ip + ":" + std::to_string(route["api_port"].asUInt()) + "/streamproxy/api/v1/task/stream_state";
     route["from_origin"] = args["from_origin"];

@@ -579,6 +579,11 @@ void addStreamProxy(const string &vhost, const string &app, const string &stream
     SessionMeta::Ptr meta;
     std::shared_ptr<void> lease;
     if (origin) {
+        if (origin_route.isMember("receive_timeout_ms")) {
+            const auto timeout = origin_route["receive_timeout_ms"].asUInt();
+            (*player)[Client::kMediaTimeoutMS] = timeout;
+            InfoL << "RTMP origin session=" << origin_route["session"].asString() << " receive_timeout_ms=" << timeout;
+        }
         SessionMeta::Snapshot state;
         state.session_id = origin_route["session"].asString();
         state.task_instance = stream;

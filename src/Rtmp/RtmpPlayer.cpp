@@ -8,6 +8,7 @@
  * may be found in the AUTHORS file in the root of the source tree.
  */
 
+#include <algorithm>
 #include "RtmpPlayer.h"
 #include "Rtmp/utils.h"
 #include "Util/util.h"
@@ -138,7 +139,7 @@ void RtmpPlayer::onPlayResult_l(const SockException &ex, bool handshake_done) {
             return true;
         };
         //创建rtmp数据接收超时检测定时器
-        _rtmp_recv_timer = std::make_shared<Timer>(timeout_ms / 2000.0f, lam, getPoller());
+        _rtmp_recv_timer = std::make_shared<Timer>(std::max<uint64_t>(1, timeout_ms / 2) / 1000.0f, lam, getPoller());
     } else {
         shutdown(SockException(Err_shutdown,"teardown"));
     }
